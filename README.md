@@ -29,6 +29,7 @@ On the right side of the canvas:
 	•	Buttons:
 	•	Simulate: Must be clicked after any change (antenna properties, new antenna, frequency, etc.)
 	•	Pause / Resume: Toggles animation.
+ •	Clear All: clears the canvas
 
 ⸻
 
