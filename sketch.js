@@ -1933,7 +1933,7 @@ function draw() {
         let currentColorMag =
           255 * squizQuantized(currentMag, k8, (levels = 256));
 
-        if (antenna.getSegFlags()[j]) {
+        if (antenna.getSegFlags()[j]&&conScreenX(Math.max(x,x_next))<width&&conScreenY(Math.max(y,y_next))<height) {
           thickLine(
             [conScreenX(x), conScreenY(y)],
             [conScreenX(x_next), conScreenY(y_next)],
