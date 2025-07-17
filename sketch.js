@@ -730,11 +730,28 @@ function setup() {
 
 function draw() {
   
-    resizeCanvas(windowWidth, windowHeight);
-  width = Math.round((1/1.4)*windowWidth)
-  height = Math.round((8/10)*windowHeight)
-  background(0, 0, 0);
   
+  if(simulate){
+   if(width<Math.floor((1/1.4)*windowWidth)||height< Math.floor((8/10)*windowHeight)){
+        
+    simulate  = false;
+    waitProcess = true;
+             
+                      
+    }
+  }
+  resizeCanvas(windowWidth, windowHeight);
+  
+ 
+  width = Math.floor((1/1.4)*windowWidth)
+  height = Math.floor((8/10)*windowHeight)
+
+ 
+  
+ 
+  
+  background(0, 0, 0);
+ 
   
 
   if (simulate) {
@@ -973,25 +990,7 @@ function draw() {
       }
     }
     }
-    
-    
-    // if loop antenna
-    else{
-      
-          let center = antenna.getCenter();
-      
-      
-          fill(250,250,250)
-          circle(conScreenX(center[0]),conScreenY(center[1]),2*Scale*antenna.getRadius()+thickLoop)
-      
-          fill(0,0,0)
-          circle(conScreenX(center[0]),conScreenY(center[1]),2*Scale*antenna.getRadius()-thickLoop)
-      
-    
-      
-      
-    }
-    
+ 
   }
   
   
@@ -1114,8 +1113,6 @@ function draw() {
   
   
   
-
-  
   
 
   //menu background
@@ -1130,16 +1127,6 @@ function draw() {
   stroke(0, 0, 0);
   fill(0, 0, 0);
   
-  push();
-
-  scale(windowWidth/1400, windowHeight/1000);
-
-
-  textSize(24);
-  text("Dipole Antenna", (35), (822));
-  
-  pop();
-      
 
   fill(150, 150, 150);
 
@@ -1148,14 +1135,14 @@ function draw() {
     stroke(250, 250, 250);
   }
 
-  rect((35/1400)*windowWidth, (830/1000)*windowHeight, (175/1400)*windowWidth, (100/1000)*windowHeight);
+  rect((35/1400)*windowWidth, (860/1000)*windowHeight, (175/1400)*windowWidth, (70/1000)*windowHeight);
 
   fill(150, 150, 150);
   stroke(0, 0, 0);
 
   if (
     !dipole_antenna_pressed &&
-    inRect((50/1400)*windowWidth,(830/1000)*windowHeight , (148/1400)*windowWidth, (90/1000)*windowHeight, mouseX, mouseY) &&
+    inRect((35/1400)*windowWidth,(860/1000)*windowHeight , (175/1400)*windowWidth, (70/1000)*windowHeight, mouseX, mouseY) &&
     mousePressedFlag
   ) {
     dipole_antenna_pressed = true;
@@ -1163,7 +1150,7 @@ function draw() {
     simulate = false;
   } else if (
     dipole_antenna_pressed &&
-   inRect((50/1400)*windowWidth,(830/1000)*windowHeight , (148/1400)*windowWidth, (90/1000)*windowHeight, mouseX, mouseY) &&
+   inRect((35/1400)*windowWidth,(860/1000)*windowHeight , (175/1400)*windowWidth, (70/1000)*windowHeight, mouseX, mouseY) &&
     mousePressedFlag
   ) {
     dipole_antenna_pressed = false;
@@ -1175,6 +1162,19 @@ function draw() {
     addNew_dipole_tx = true;
   }
   
+  
+   stroke(0, 0, 0);
+  fill(0, 0, 0);
+  
+  push();
+
+  scale(windowWidth/1400, windowHeight/1000);
+
+
+  textSize(23);
+  text("Dipole Antenna", (44), (902));
+  
+  pop();
   
   
   
@@ -1194,7 +1194,7 @@ function draw() {
   }
   
   
-   if (inRect((920/1400)*windowWidth, (830/1000)*windowHeight, (80/1400)*windowWidth, (80/1000)*windowHeight, mouseX, mouseY)) {
+   if (inRect((920/1400)*windowWidth, (860/1000)*windowHeight, (80/1400)*windowWidth, (80/1000)*windowHeight, mouseX, mouseY)) {
   
     
      if((!pause)&&mousePressedFlag){
@@ -1215,7 +1215,7 @@ function draw() {
      
    }
   
-  rect((920/1400)*windowWidth, (830/1000)*windowHeight, (80/1400)*windowWidth, (80/1000)*windowHeight);
+  rect((920/1400)*windowWidth, (860/1000)*windowHeight, (80/1400)*windowWidth, (80/1000)*windowHeight);
   
   
    if(!pause){
@@ -1226,7 +1226,7 @@ function draw() {
 
   scale(windowWidth/1400, windowHeight/1000);   
   textSize((24));
-  text("Pause", (925), (822));
+  text("Pause", (925), (852));
     pop();
   }
   
@@ -1238,7 +1238,7 @@ function draw() {
 
   scale(windowWidth/1400, windowHeight/1000);
   textSize(24);
-  text("Resume", (915), (822));
+  text("Resume", (915), (852));
   pop()
     
   }
@@ -1581,7 +1581,9 @@ function draw() {
 
   fill(250, 250, 250);
 
-  rect(windowWidth*1130/1400, windowHeight*350/1000, windowWidth*200/1400, windowHeight*20/1000);
+  rect(windowWidth*1130/1400, windowHeight*350/1000, windowWidth*200/1400, windowHeight*30/1000);
+  
+
 
   //frequency slider button
 
@@ -1589,10 +1591,10 @@ function draw() {
 
   if (
     mousePressedFlag &&
-    inRect(windowWidth*1130/1400 + freq_button_offset, windowHeight*350/1000, windowWidth*30/1400, windowHeight*20/1000, mouseX, mouseY)
+    inRect(windowWidth*1130/1400 + freq_button_offset, windowHeight*350/1000, windowWidth*30/1400, windowHeight*30/1000, mouseX, mouseY)
   ) {
     freq_slider_on = true;
-  } else if (!mousePressedFlag ||  !inRect(windowWidth*1130/1400 + freq_button_offset, windowHeight*350/1000, windowWidth*30/1400, windowHeight*20/1000, mouseX, mouseY)) {
+  } else if (!mousePressedFlag ||  !inRect(windowWidth*1130/1400, windowHeight*350/1000, windowWidth*200/1400, windowHeight*30/1000,mouseX,mouseY)) {
     freq_slider_on = false;
   }
 
@@ -1602,7 +1604,7 @@ function draw() {
 
     fill(90, 90, 90);
 
-    freq_button_offset = mouseX - windowWidth*1130/1400 - windowWidth*5/1400;
+    freq_button_offset =mouseX - windowWidth*(1130 + 15)/1400;
     if (freq_button_offset < 0) {
       freq_button_offset = 0;
     } else if (freq_button_offset + windowWidth*30/1400 > windowWidth*200/1400) {
@@ -1610,7 +1612,7 @@ function draw() {
     }
   }
 
-  rect(windowWidth*1130/1400 + freq_button_offset, windowHeight*350/1000, windowWidth*30/1400, windowHeight*20/1000);
+  rect(windowWidth*1130/1400 + freq_button_offset, windowHeight*350/1000, windowWidth*30/1400, windowHeight*30/1000);
 
   if (freq_slider_process && mouseRelease) {
     freq = minFreq + (freq_button_offset / (windowWidth*(200 - 30)/1400)) * (maxFreq - minFreq);
@@ -1627,14 +1629,14 @@ function draw() {
   fill(0, 0, 0);
   push()
   scale(windowWidth/1400, windowHeight/1000);
-  text("Speed", 1200, 440);
+  text("Speed", 1200, 420);
   pop()
   textSize(20);
 
   stroke(0, 0, 0);
   fill(250, 250, 250);
 
-  rect(windowWidth*1130/1400, windowHeight*450/1000, windowWidth*200/1400, windowHeight*20/1000);
+  rect(windowWidth*1130/1400, windowHeight*430/1000, windowWidth*200/1400, windowHeight*30/1000);
 
   //speed of EM waves slider button
 
@@ -1643,10 +1645,10 @@ function draw() {
 
   if (
     mousePressedFlag &&
-    inRect(windowWidth*1130/1400 + speed_button_offset, windowHeight*450/1000, windowWidth*30/1400, windowHeight*20/1000, mouseX, mouseY)
+    inRect(windowWidth*1130/1400 + speed_button_offset, windowHeight*430/1000, windowWidth*30/1400, windowHeight*30/1000, mouseX, mouseY)
   ) {
     speed_slider_on = true;
-  } else if (!mousePressedFlag || !inRect(windowWidth*1130/1400 + speed_button_offset, windowHeight*450/1200, windowWidth*30/1400, windowHeight*20/1000, mouseX, mouseY)) {
+  } else if (!mousePressedFlag || !inRect(windowWidth*1130/1400, windowHeight*430/1000, windowWidth*200/1400, windowHeight*30/1000,mouseX,mouseY)) {
     speed_slider_on = false;
   }
 
@@ -1664,7 +1666,7 @@ function draw() {
     }
   }
 
-  rect(windowWidth*1130/1400 + speed_button_offset, windowHeight*450/1000, windowWidth*30/1400, windowHeight*20/1000);
+  rect(windowWidth*1130/1400 + speed_button_offset, windowHeight*430/1000, windowWidth*30/1400, windowHeight*30/1000);
 
   if (speed_slider_process && mouseRelease) {
     c = minSpeed + (speed_button_offset / (200 - 30)) * (maxSpeed - minSpeed);
@@ -1680,11 +1682,15 @@ function draw() {
   // process changes 
 
   if (waitProcess) {
+    
+    
     let k = (2 * Math.PI * freq) / c;
    
     cFACTOR1 = new ComplexNum(0, -2 * Math.PI * freq);
     cFACTOR2 = new ComplexNum(0, -c / k);
-
+    N = Math.ceil(height / sLength);
+    M = Math.ceil(width / sLength);
+    
     for (let y = 0; y < height; y += sLength) {
       for (let x = 0; x < width; x += sLength) {
         let x_ind = int(x / sLength);
@@ -2204,6 +2210,8 @@ function draw() {
    
       
 }
+  
+
  
 }
 
