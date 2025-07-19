@@ -387,7 +387,7 @@ class ComplexNum {
 
 //grid square side length
 let sLength = 5;
-const dl_hr = 0.05;
+const dl_hr = 0.04;
 const dl_mr = 0.1
 const dl_lr = 0.2
 
@@ -527,7 +527,7 @@ let amp_slider_process = false;
 let phase_slider_on = false;
 let phase_slider_process = false;
 
-const arrow_spacing = 6;
+let arrow_spacing = 5;
 const maxArrowLen = 14;
 const thickDipole = 12;
 
@@ -1405,7 +1405,8 @@ function draw() {
     mousePressedFlag = false;
       simulate = false;
       flagChangeRes = true;
-     sLength = 4
+     sLength = 2    
+      arrow_spacing = 10
   }
 
   
@@ -1420,11 +1421,13 @@ function draw() {
     mousePressedFlag = false;
       simulate = false;
      flagChangeRes = true;
-      sLength = 5
+      sLength = 4
+      arrow_spacing = 5
      
+      
   }
 
-  
+ 
    if (
     resolution!=1 &&
     inRect(windowWidth*1188/1400, windowHeight*910/1000, windowWidth*110/1400, windowHeight*50/1000, mouseX, mouseY) &&
@@ -1435,7 +1438,10 @@ function draw() {
     mousePressedFlag = false;
      simulate = false;
      flagChangeRes= true;
-      sLength = 6
+      sLength = 5
+      arrow_spacing = 4
+      
+       
   }
 
   
@@ -2004,7 +2010,23 @@ function draw() {
   }
 
   isMouseInStatBox = false;
+  
+   for (let b = 0; b < antennas.length; b++) {
+    antenna = antennas[b];
 
+    let xBox = conScreenX(antenna.getXBox());
+    let yBox = conScreenY(antenna.getYBox());
+     if(antenna.getShowBox()&&inRect(xBox , yBox,  windowWidth*400/1400,  windowHeight*370/1000, mouseX, mouseY)){
+        
+        isMouseInStatBox = true;
+        
+      }
+  
+  
+   }
+  
+  
+  
  for (let b = 0; b < antennas.length; b++) {
     antenna = antennas[b];
 
@@ -2037,11 +2059,7 @@ function draw() {
 
       rect(xBox, yBox, windowWidth*400/1400, windowHeight*370/1000);
       
-      if(inRect(xBox , yBox,  windowWidth*400/1400,  windowHeight*370/1000, mouseX, mouseY)){
-        
-        isMouseInStatBox = true;
-        
-      }
+    
 
       stroke(0, 0, 0);
       fill(250, 250, 250);
@@ -2255,8 +2273,6 @@ function draw() {
 
     }
       
-      
-     
       
     if (inRectGen(p1F, p2F, p3F, p4F, mouseX, mouseY) && mousePressedFlag&&!isMouseInStatBox) {
       mousePressedFlag = false;
