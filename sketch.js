@@ -475,7 +475,7 @@ let mousePressedFlag = false;
 //states
 let addNew_dipole_tx = false;
 let change_dipole_tx = false;
-let waitProcess = false;
+let waitProcess = true;
 let simulate = false;
 let pause = false;
 
@@ -697,6 +697,7 @@ function setup() {
   
   width = Math.round((1/1.4)*windowWidth)
   height = Math.round((8/10)*windowHeight)
+
   
 
   background(0, 0, 0);
@@ -726,12 +727,68 @@ function setup() {
   loadPixels(); // fill the pixel buffer from canvas
 
   updatePixels(); // commit black pixels to canvas
+  
+  
+   let myP1 = [conMyX(width/2), conMyY(2*height/3)];
+    let myP2 = [conMyX(width/2), conMyY(height/3)];
+
+          let amp = defAmp;
+          let phase = 0;
+                 
+          
+      
+
+          dipole = new Dipole(
+            c / freq,
+            myP1,
+            myP2,
+            amp,
+            phase,
+            thickDipole / Scale
+          );
+          
+          if(resolution==1){
+            
+            dipole.setDl(dl_lr)
+            
+          }
+          
+          
+          else if(resolution==2){
+            
+            dipole.setDl(dl_mr)
+            
+          }
+          
+          
+          else {
+            
+            dipole.setDl(dl_hr)
+            
+          }
+          
+
+          antennas.push(dipole);
+
+          amp_button_offset.push((defAmp / maxAmp) * ((300 - 40)/1400)*windowWidth);
+          phase_button_offset.push(0);
+          sep_button_offset.push(defaultDipoleSep*((300 - 40)/1400)*windowWidth/maxSep);
+
+          flags_amp_button.push(false);
+          flags_phase_button.push(false);
+          flags_sep_button.push(false);
+          delButtonPressed.push(false)
+          wairProcess = true;
+          simulate = false;
+        
+  
 }
 
 function draw() {
   
-  
+     
   if(simulate){
+ 
    if(width<Math.floor((1/1.4)*windowWidth)||height< Math.floor((8/10)*windowHeight)){
         
     simulate  = false;
@@ -1030,8 +1087,8 @@ function draw() {
 
           dipole = new Dipole(
             c / freq,
-            [conMyX(p1[0]), conMyY(p1[1])],
-            [conMyX(p2[0]), conMyY(p2[1])],
+            myP1,
+            myP2,
             amp,
             phase,
             thickDipole / Scale
@@ -1251,7 +1308,7 @@ function draw() {
 
     if (inRect((1150/1400)*windowWidth, (515/1000)*windowHeight, (180/1400)*windowWidth, (60/1000)*windowHeight, mouseX, mouseY)) {
       fill(0, 150, 0);
-
+       
       if (mousePressedFlag) {
         waitProcess = false;
         simulate = false;
@@ -1829,6 +1886,7 @@ function draw() {
       }
     }
 
+  
     waitProcess = false;
     simulate = true;
   }
