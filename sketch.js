@@ -437,7 +437,7 @@ const k4 = 0.05;
 const k5 = 0.05;
 const k6 = 0.01;
 
-const k7 = 0.4;
+const k7 = 0.6;
 
 const k8 = 0.25;
 
@@ -798,7 +798,7 @@ function draw() {
    
    
    
-    for (let b = 0; b < antennas.length && !simulate; b++) {
+    for (let b = 0; b < antennas.length; b++) {
  
     amp_button_offset[b]*=windowWidth/prevWidth;
     phase_button_offset[b] *=windowWidth/prevWidth;
@@ -967,9 +967,10 @@ function draw() {
           a = colorSizeEA;
         } else if (show_EnergyFlux) {
           let Energy_flux_mag =
-            E[2 * tempInd] * E[2 * tempInd] +
-            E[2 * tempInd + 1] * E[2 * tempInd + 1] +
-            c * c * B[tempInd] * B[tempInd];
+           (
+              E[2 * tempInd] * E[2 * tempInd] +
+                E[2 * tempInd + 1] * E[2 * tempInd + 1]
+            ) * Math.abs(B[tempInd]);
           let colorSizeEnergyA = squizQuantized(
             Energy_flux_mag,
             
