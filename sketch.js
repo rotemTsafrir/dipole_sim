@@ -397,6 +397,9 @@ const Scale = 50;
 let width = 1000;
 let height = 800;
 
+let prevWidth = width;
+let prevHeight = height;
+
 let N = Math.ceil(height / sLength);
 let M = Math.ceil(width / sLength);
 
@@ -434,7 +437,7 @@ const k4 = 0.05;
 const k5 = 0.05;
 const k6 = 0.01;
 
-const k7 = 0.1;
+const k7 = 0.4;
 
 const k8 = 0.25;
 
@@ -729,7 +732,7 @@ function setup() {
   updatePixels(); // commit black pixels to canvas
   
   
-   let myP1 = [conMyX(width/2), conMyY(2*height/3)];
+   let myP1 = [conMyX(0.05+width/2), conMyY(2*height/3)];
     let myP2 = [conMyX(width/2), conMyY(height/3)];
 
           let amp = defAmp;
@@ -786,24 +789,53 @@ function setup() {
 
 function draw() {
   
-     
-  if(simulate){
+  
+  
+ if(windowWidth!=prevWidth||windowHeight!=prevHeight){
+   
+   freq_button_offset = freq_button_offset*windowWidth/prevWidth
+   speed_button_offset = speed_button_offset*windowWidth/prevWidth
+   
+   
+   
+    for (let b = 0; b < antennas.length && !simulate; b++) {
  
-   if(width<Math.floor((1/1.4)*windowWidth)||height< Math.floor((8/10)*windowHeight)){
+    amp_button_offset[b]*=windowWidth/prevWidth;
+    phase_button_offset[b] *=windowWidth/prevWidth;
+    sep_button_offset[b] *=windowWidth/prevWidth;     
+      
+    }
+   
+   
+  
+   
+   
+     if(simulate){
+ 
+   if(prevWidth<windowWidth||prevHeight<windowHeight){
         
     simulate  = false;
     waitProcess = true;
-             
-                      
+                                
     }
+      
+      
   }
-  resizeCanvas(windowWidth, windowHeight);
-  
- 
+   
+    
+   prevWidth = windowWidth;
+   prevHeight = windowHeight;
+   
+   resizeCanvas(windowWidth, windowHeight);
+   
   width = Math.floor((1/1.4)*windowWidth)
   height = Math.floor((8/10)*windowHeight)
 
+    
+    }
+     
  
+
   
  
   
@@ -1631,8 +1663,7 @@ function draw() {
   }
 
   // frequency slider
-
-  
+   
   stroke(0, 0, 0);
   fill(0, 0, 0);
   
@@ -1676,9 +1707,12 @@ function draw() {
   }
 
   rect(windowWidth*1130/1400 + freq_button_offset, windowHeight*350/1000, windowWidth*30/1400, windowHeight*30/1000);
+  
+  
 
   if (freq_slider_process && mouseRelease) {
     freq = minFreq + (freq_button_offset / (windowWidth*(200 - 30)/1400)) * (maxFreq - minFreq);
+    
 
     freq_slider_process = false;
 
@@ -1732,7 +1766,7 @@ function draw() {
   rect(windowWidth*1130/1400 + speed_button_offset, windowHeight*430/1000, windowWidth*30/1400, windowHeight*30/1000);
 
   if (speed_slider_process && mouseRelease) {
-    c = minSpeed + (speed_button_offset / (200 - 30)) * (maxSpeed - minSpeed);
+    c = minSpeed + (speed_button_offset /(windowWidth*(200 - 30)/1400)) * (maxSpeed - minSpeed);
 
     speed_slider_process = false;
 
