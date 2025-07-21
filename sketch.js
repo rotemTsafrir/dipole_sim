@@ -567,7 +567,7 @@ let lastMouseY;
 let const_rFactor1 = Math.fround((Scale * Scale) / (sLength * sLength));
 let const_rFactor2 = Math.fround(Scale / (2 * sLength));
 
-function squizQuantized(l, k, levels = 256) {
+function squiz(l, k, levels = 256) {
   
   if(l<=0){
     
@@ -575,15 +575,9 @@ function squizQuantized(l, k, levels = 256) {
   }
   
   // Step 1: compute the squiz output (same as original)
-  let exact = k*l / (1 + k*l);
+  let ans = k*l / (1 + k*l)
 
-  // Step 2: quantize the result to N levels in [0,1]
-  let step = Math.fround(1 / (levels - 1));
-  let quantized = Math.round(exact / step) * step;
-  
- 
-
-  return quantized;
+  return ans;
 }
 
 function length2D(p1, p2) {
@@ -895,7 +889,7 @@ function draw() {
           let B_temp = B[tempInd];
           let colorSizeB_Blue =
             255 *
-            squizQuantized(
+            squiz(
               -B[tempInd] * Math.abs(B_temp),
               
               k1,
@@ -903,8 +897,8 @@ function draw() {
             );
           let colorSizeB_Red =
             255 *
-            squizQuantized(B_temp * Math.abs(B_temp), k1, (colorRes = 256));
-          let colorSizeMag = squizQuantized(
+            squiz(B_temp * Math.abs(B_temp), k1, (colorRes = 256));
+          let colorSizeMag = squiz(
             Math.abs(B_temp),
           
             k1B,
@@ -919,9 +913,9 @@ function draw() {
           let E_mag_2 =
             E[2 * tempInd] * E[2 * tempInd] +
             E[2 * tempInd + 1] * E[2 * tempInd + 1];
-          let colorSizeEA = squizQuantized(E_mag_2, k3, (levels = 256));
+          let colorSizeEA = squiz(E_mag_2, k3, (levels = 256));
           let colorSizeEB =
-            255 * squizQuantized(E_mag_2, k4, (levels = 256));
+            255 * squiz(E_mag_2, k4, (levels = 256));
 
           // Simplified HSB to RGB - assuming your original colorMode(HSB, 500, 100, 100)
           let hue = (255 - colorSizeEB) / 500; // 0-1 range
@@ -971,14 +965,14 @@ function draw() {
               E[2 * tempInd] * E[2 * tempInd] +
                 E[2 * tempInd + 1] * E[2 * tempInd + 1]
             ) * Math.abs(B[tempInd]);
-          let colorSizeEnergyA = squizQuantized(
+          let colorSizeEnergyA = squiz(
             Energy_flux_mag,
             
             k5,
             (levels = 256)
           );
           let colorSizeEnergyB =
-            255 * squizQuantized(Energy_flux_mag, k6, (levels = 256));
+            255 * squiz(Energy_flux_mag, k6, (levels = 256));
 
           // Similar HSB conversion
           let hue = (255 - colorSizeEnergyB) / 500;
@@ -1954,7 +1948,7 @@ function draw() {
           );
 
           let arrow_l =
-            maxArrowLen * squizQuantized(E_mag, k2, (levels = 256));
+            maxArrowLen * squiz(E_mag, k2, (levels = 256));
 
           let screenX = sLength * i;
           let screenY = sLength * j;
@@ -1983,7 +1977,7 @@ function draw() {
             ) * Math.abs(B[tempInd]);
 
           let arrow_l =
-            maxArrowLen * squizQuantized(E_flux_mag, k7, (levels = 256));
+            maxArrowLen * squiz(E_flux_mag, k7, (levels = 256));
 
           let screenX = sLength * i;
           let screenY = sLength * j;
@@ -2030,7 +2024,7 @@ function draw() {
         let currentMag = Math.abs(currentPhasor.product(timePhase).getA());
 
         let currentColorMag =
-          255 * squizQuantized(currentMag, k8, (levels = 256));
+          255 * squiz(currentMag, k8, (levels = 256));
 
         if (antenna.getSegFlags()[j]&&conScreenX(Math.max(x,x_next))<width&&conScreenY(Math.max(y,y_next))<height) {
           thickLine(
