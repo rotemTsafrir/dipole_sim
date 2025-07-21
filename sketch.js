@@ -1017,12 +1017,7 @@ function draw() {
           a = colorSizeEnergyA;
         }
 
-        // Ensure values are within valid range
-        r = Math.max(0, Math.min(255, r));
-        g = Math.max(0, Math.min(255, g));
-        b = Math.max(0, Math.min(255, b));
-        a = Math.max(0, Math.min(255, a));
-
+      
         // Fill the rectangular block - make sure we're only in the 1000x800 region
         let maxX = width; // Limit to your actual drawing area
         let maxY = height;
