@@ -879,8 +879,8 @@ function draw() {
           );
         }
 
-        let screenX = Math.floor(sLength * i);
-        let screenY = Math.floor(sLength * j);
+        let screenX = sLength * i;
+        let screenY = sLength * j;
 
         // Calculate color values
         let r, g, b, a;
