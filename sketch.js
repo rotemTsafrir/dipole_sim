@@ -567,6 +567,17 @@ let lastMouseY;
 let const_rFactor1 = Math.fround((Scale * Scale) / (sLength * sLength));
 let const_rFactor2 = Math.fround(Scale / (2 * sLength));
 
+let angleCache = {};
+
+
+function cos(angle) {
+  let key = Math.round(angle * 100) / 100; // round to 3 decimal places
+  if (!(key in angleCache)) {
+    angleCache[key] = Math.cos(key);
+  }
+  return angleCache[key];
+}
+
 function squiz(l, k, levels = 256) {
   
   if(l<=0){
@@ -864,18 +875,18 @@ function draw() {
         if (!show_BField) {
           E[2 * tempInd] = Math.fround(
             E_phase_amp[4 * tempInd] *
-              Math.cos(E_phase_amp[4 * tempInd + 1] + timeSim * w)
+              cos(E_phase_amp[4 * tempInd + 1] + timeSim * w)
           );
           E[2 * tempInd + 1] = Math.fround(
             E_phase_amp[4 * tempInd + 2] *
-              Math.cos(E_phase_amp[4 * tempInd + 3] + timeSim * w)
+              cos(E_phase_amp[4 * tempInd + 3] + timeSim * w)
           );
         }
 
         if (show_BField || show_EnergyFlux) {
           B[tempInd] = Math.fround(
             B_phase_amp[2 * tempInd] *
-              Math.cos(B_phase_amp[2 * tempInd + 1] + timeSim * w)
+              cos(B_phase_amp[2 * tempInd + 1] + timeSim * w)
           );
         }
 
