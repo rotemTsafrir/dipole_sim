@@ -2186,7 +2186,7 @@ function draw() {
       if (flags_phase_button[b]) {
         phase_slider_process = true;
         simulate = false;
-        antenna.setPhase(2 * Math.PI*0.1*Math.round( 10* phase_button_offset[b] / (windowWidth*(300 - 40)/1400)));
+        antenna.setPhase(2 * Math.PI*(1/12)*Math.round( 12* phase_button_offset[b] / (windowWidth*(300 - 40)/1400)));
 
         fill(90, 90, 90);
 
