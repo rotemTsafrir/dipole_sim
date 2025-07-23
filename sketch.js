@@ -560,6 +560,30 @@ let lastMouseY;
 
 let const_rFactor1 = ((Scale * Scale) / (sLength * sLength));
 let const_rFactor2 = (Scale / (2 * sLength));
+
+
+// Precompute trig tables for 0 to 2π
+const TWO_PI = Math.PI * 2;
+const STEP = 0.01;  // precision in radians (smaller = more accurate)
+const TABLE_SIZE = Math.ceil(TWO_PI / STEP) + 1;
+
+// Precompute sin and cos in arrays
+const SIN_TABLE = new Float64Array(TABLE_SIZE);
+const COS_TABLE = new Float64Array(TABLE_SIZE);
+
+for (let i = 0; i < TABLE_SIZE; i++) {
+  let angle = i * STEP;
+  COS_TABLE[i] = Math.cos(angle);
+}
+
+
+function getCos(angle) {
+  let normalized = angle % TWO_PI;
+  if (normalized < 0) normalized += TWO_PI;
+  let index = Math.round(normalized / STEP);
+  return COS_TABLE[index];
+}
+
  
 
 function squiz(l, k, levels = 256) {
@@ -859,18 +883,18 @@ function draw() {
         if (!show_BField) {
           E[2 * tempInd] = (
             E_phase_amp[4 * tempInd] *
-              Math.cos(E_phase_amp[4 * tempInd + 1] + timeSim * w)
+              getCos(E_phase_amp[4 * tempInd + 1] + timeSim * w)
           );
           E[2 * tempInd + 1] = (
             E_phase_amp[4 * tempInd + 2] *
-              Math.cos(E_phase_amp[4 * tempInd + 3] + timeSim * w)
+              getCos(E_phase_amp[4 * tempInd + 3] + timeSim * w)
           );
         }
 
         if (show_BField || show_EnergyFlux) {
           B[tempInd] = (
             B_phase_amp[2 * tempInd] *
-              Math.cos(B_phase_amp[2 * tempInd + 1] + timeSim * w)
+              getCos(B_phase_amp[2 * tempInd + 1] + timeSim * w)
           );
         }
 
