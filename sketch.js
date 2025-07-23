@@ -325,15 +325,9 @@ class ComplexNum {
     this.a = a;
     this.b = b;
     this.absVal = (Math.sqrt(a * a + b * b));
-    if (a > 0 && b > 0) this.phase = (Math.atan(b / a));
-    else if (a > 0 && b < 0) this.phase = (Math.atan(b / a));
-    else if (a == 0 && b > 0) this.phase = (Math.PI / 2);
-    else if (a == 0 && b < 0) this.phase = -(Math.PI / 2);
-    else if (a > 0 && b == 0) this.phase = 0;
-    else if (a < 0 && b == 0) this.phase = (Math.PI);
-    else if (a < 0 && b > 0)
-      this.phase = (Math.atan(b / a) + Math.PI);
-    else this.phase = (Math.atan(b / a) - Math.PI);
+  
+    this.phase = Math.atan2(b , a);
+   
   }
 
   getA() {
@@ -1035,7 +1029,7 @@ function draw() {
               pixels[pixelIndex] = r * a; // Red
               pixels[pixelIndex + 1] = g * a; // Green
               pixels[pixelIndex + 2] = b * a; // Blue
-              pixels[pixelIndex + 3] = 255; // Alpha
+             
             }
           }
         }
