@@ -139,30 +139,30 @@ class Dipole extends Antenna {
       this.endPointB[1] - this.endPointA[1],
       this.endPointA[0] - this.endPointB[0],
     ];
-    let len = Math.fround(
+    let len = (
       Math.sqrt(tempDel[0] * tempDel[0] + tempDel[1] * tempDel[1])
     );
 
-    tempDel[0] *= Math.fround(this.thickness / len);
-    tempDel[1] *= Math.fround(this.thickness / len);
+    tempDel[0] *= (this.thickness / len);
+    tempDel[1] *= (this.thickness / len);
 
-    this.P1[0] = Math.fround(this.endPointA[0] + 0.5 * tempDel[0]);
-    this.P1[1] = Math.fround(this.endPointA[1] + 0.5 * tempDel[1]);
+    this.P1[0] = (this.endPointA[0] + 0.5 * tempDel[0]);
+    this.P1[1] = (this.endPointA[1] + 0.5 * tempDel[1]);
 
-    this.P2[0] = Math.fround(this.endPointB[0] + 0.5 * tempDel[0]);
-    this.P2[1] = Math.fround(this.endPointB[1] + 0.5 * tempDel[1]);
+    this.P2[0] = (this.endPointB[0] + 0.5 * tempDel[0]);
+    this.P2[1] = (this.endPointB[1] + 0.5 * tempDel[1]);
 
-    this.P3[0] = Math.fround(this.endPointB[0] - 0.5 * tempDel[0]);
-    this.P3[1] = Math.fround(this.endPointB[1] - 0.5 * tempDel[1]);
+    this.P3[0] = (this.endPointB[0] - 0.5 * tempDel[0]);
+    this.P3[1] = (this.endPointB[1] - 0.5 * tempDel[1]);
 
-    this.P4[0] = Math.fround(this.endPointA[0] - 0.5 * tempDel[0]);
-    this.P4[1] = Math.fround(this.endPointA[1] - 0.5 * tempDel[1]);
+    this.P4[0] = (this.endPointA[0] - 0.5 * tempDel[0]);
+    this.P4[1] = (this.endPointA[1] - 0.5 * tempDel[1]);
 
-    let maxX = Math.fround(Math.max(this.P1[0], this.P2[0]));
+    let maxX = (Math.max(this.P1[0], this.P2[0]));
     let Y = this.P4[1];
 
-    maxX = Math.fround(Math.max(maxX, this.P3[0]));
-    maxX = Math.fround(Math.max(maxX, this.P4[0]));
+    maxX = (Math.max(maxX, this.P3[0]));
+    maxX = (Math.max(maxX, this.P4[0]));
 
     if (maxX === this.P1[0]) {
       Y = this.P1[1];
@@ -172,8 +172,8 @@ class Dipole extends Antenna {
       Y = this.P3[1];
     }
 
-    this.xBox = Math.fround(maxX + this.delBoxAntenna);
-    this.yBox = Math.fround(Y - this.delBoxAntenna);
+    this.xBox = (maxX + this.delBoxAntenna);
+    this.yBox = (Y - this.delBoxAntenna);
   }
 
   getSep() {
@@ -181,10 +181,10 @@ class Dipole extends Antenna {
   }
 
   dist2D(p1, p2) {
-    let temp = Math.fround(
+    let temp = (
       (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1])
     );
-    return Math.fround(Math.sqrt(temp));
+    return (Math.sqrt(temp));
   }
 
   setCurrentSegments() {
@@ -198,7 +198,7 @@ class Dipole extends Antenna {
     let pB;
     let delP = [0, 0];
     let p = [0, 0];
-    let k = Math.fround((2 * Math.PI) / this.wavelength);
+    let k = ((2 * Math.PI) / this.wavelength);
 
     for (let i = 0; i < this.wirePoints.length - 1; i++) {
       pA = this.wirePoints[i];
@@ -212,8 +212,8 @@ class Dipole extends Antenna {
       l = 0;
 
       while (l <= sideLen) {
-        p[0] = Math.fround(pA[0] + (l / sideLen) * delP[0]);
-        p[1] = Math.fround(pA[1] + (l / sideLen) * delP[1]);
+        p[0] = (pA[0] + (l / sideLen) * delP[0]);
+        p[1] = (pA[1] + (l / sideLen) * delP[1]);
 
         this.segments.push([p[0], p[1]]);
 
@@ -234,7 +234,7 @@ class Dipole extends Antenna {
         this.currentSegments.push(Ivec);
 
         l += this.dl;
-        l = Math.fround(Math.round(10000 * l) / 10000.0);
+        l = (Math.round(10000 * l) / 10000.0);
       }
     }
   }
@@ -324,16 +324,16 @@ class ComplexNum {
   constructor(a, b) {
     this.a = a;
     this.b = b;
-    this.absVal = Math.fround(Math.sqrt(a * a + b * b));
-    if (a > 0 && b > 0) this.phase = Math.fround(Math.atan(b / a));
-    else if (a > 0 && b < 0) this.phase = Math.fround(Math.atan(b / a));
-    else if (a == 0 && b > 0) this.phase = Math.fround(Math.PI / 2);
-    else if (a == 0 && b < 0) this.phase = -Math.fround(Math.PI / 2);
+    this.absVal = (Math.sqrt(a * a + b * b));
+    if (a > 0 && b > 0) this.phase = (Math.atan(b / a));
+    else if (a > 0 && b < 0) this.phase = (Math.atan(b / a));
+    else if (a == 0 && b > 0) this.phase = (Math.PI / 2);
+    else if (a == 0 && b < 0) this.phase = -(Math.PI / 2);
     else if (a > 0 && b == 0) this.phase = 0;
-    else if (a < 0 && b == 0) this.phase = Math.fround(Math.PI);
+    else if (a < 0 && b == 0) this.phase = (Math.PI);
     else if (a < 0 && b > 0)
-      this.phase = Math.fround(Math.atan(b / a) + Math.PI);
-    else this.phase = Math.fround(Math.atan(b / a) - Math.PI);
+      this.phase = (Math.atan(b / a) + Math.PI);
+    else this.phase = (Math.atan(b / a) - Math.PI);
   }
 
   getA() {
@@ -378,8 +378,8 @@ class ComplexNum {
 
   static cis(phase) {
     return new ComplexNum(
-      Math.fround(Math.cos(phase)),
-      Math.fround(Math.sin(phase))
+      (Math.cos(phase)),
+      (Math.sin(phase))
     );
   }
 }
@@ -564,8 +564,8 @@ let p4F = new Float32Array(2);
 let lastMouseX;
 let lastMouseY;
 
-let const_rFactor1 = Math.fround((Scale * Scale) / (sLength * sLength));
-let const_rFactor2 = Math.fround(Scale / (2 * sLength));
+let const_rFactor1 = ((Scale * Scale) / (sLength * sLength));
+let const_rFactor2 = (Scale / (2 * sLength));
  
 
 function squiz(l, k, levels = 256) {
@@ -582,7 +582,7 @@ function squiz(l, k, levels = 256) {
 }
 
 function length2D(p1, p2) {
-  return Math.fround(
+  return (
     Math.sqrt(
       (p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1])
     )
@@ -863,18 +863,18 @@ function draw() {
         let tempInd = j * M + i;
 
         if (!show_BField) {
-          E[2 * tempInd] = Math.fround(
+          E[2 * tempInd] = (
             E_phase_amp[4 * tempInd] *
               Math.cos(E_phase_amp[4 * tempInd + 1] + timeSim * w)
           );
-          E[2 * tempInd + 1] = Math.fround(
+          E[2 * tempInd + 1] = (
             E_phase_amp[4 * tempInd + 2] *
               Math.cos(E_phase_amp[4 * tempInd + 3] + timeSim * w)
           );
         }
 
         if (show_BField || show_EnergyFlux) {
-          B[tempInd] = Math.fround(
+          B[tempInd] = (
             B_phase_amp[2 * tempInd] *
               Math.cos(B_phase_amp[2 * tempInd + 1] + timeSim * w)
           );
@@ -1473,8 +1473,8 @@ function draw() {
     N = Math.ceil(height / sLength);
     M = Math.ceil(width / sLength);
     
-     const_rFactor1 = Math.fround((Scale * Scale) / (sLength * sLength));
-     const_rFactor2 = Math.fround(Scale / (2 * sLength));
+     const_rFactor1 = ((Scale * Scale) / (sLength * sLength));
+     const_rFactor2 = (Scale / (2 * sLength));
 
 
     
@@ -1936,7 +1936,7 @@ function draw() {
         let tempInd = M * j + i;
 
         if (show_EField) {
-          let E_mag = Math.fround(
+          let E_mag = (
             Math.sqrt(
               E[2 * tempInd] * E[2 * tempInd] +
                 E[2 * tempInd + 1] * E[2 * tempInd + 1]
