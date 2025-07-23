@@ -780,8 +780,11 @@ function setup() {
 }
 
 function draw() {
-  
-  frameRate(15);
+
+  if(resolution == 3){
+  frameRate(20);
+
+  }
   
  if(windowWidth!=prevWidth||windowHeight!=prevHeight){
    
