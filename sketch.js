@@ -781,7 +781,7 @@ function setup() {
 
 function draw() {
   
-  frameRate(30);
+  frameRate(15);
   
  if(windowWidth!=prevWidth||windowHeight!=prevHeight){
    
