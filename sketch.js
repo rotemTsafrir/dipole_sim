@@ -2237,9 +2237,9 @@ function draw() {
       if (
         !mousePressedFlag ||
         ! inRect(
-          xBox + windowWidth*50/1400 + sep_button_offset[b],
+          xBox + windowWidth*50/1400 ,
           yBox + windowHeight*255/1000,
-          windowWidth*40/1400,
+          windowWidth*300/1400,
           windowHeight*30/1000,
           mouseX,
           mouseY
