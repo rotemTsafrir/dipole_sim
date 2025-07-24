@@ -449,7 +449,7 @@ let antennas = [];
 let E_phasor = [];
 
 //magnetic field phasor
-let B_phasor = [];
+let B_phasor;
 
 //electric field phasor
 let E_phase_amp = [];
@@ -1858,8 +1858,8 @@ function draw() {
       for (let j = 1; j + 2 < height / sLength; j++) {
         let tempInd = M * j + i;
 
-        E_phasor[2 * tempInd] = A[2 * tempInd].product(cFACTOR1);
-        E_phasor[2 * tempInd + 1] = A[2 * tempInd + 1].product(cFACTOR1);
+        E_phasor[0] = A[2 * tempInd].product(cFACTOR1);
+        E_phasor[1] = A[2 * tempInd + 1].product(cFACTOR1);
 
         //calculate E phasor
 
@@ -1895,13 +1895,13 @@ function draw() {
         tempE[0] = tempE[0].product(cFACTOR2);
         tempE[1] = tempE[1].product(cFACTOR2);
 
-        E_phasor[2 * tempInd] = E_phasor[2 * tempInd].add(tempE[0]);
-        E_phasor[2 * tempInd + 1] = E_phasor[2 * tempInd + 1].add(tempE[1]);
+        E_phasor[0] = E_phasor[0].add(tempE[0]);
+        E_phasor[1] = E_phasor[1].add(tempE[1]);
 
-        E_phase_amp[4 * tempInd] = E_phasor[2 * tempInd].getAbsVal();
-        E_phase_amp[4 * tempInd + 1] = E_phasor[2 * tempInd].getPhase();
-        E_phase_amp[4 * tempInd + 2] = E_phasor[2 * tempInd + 1].getAbsVal();
-        E_phase_amp[4 * tempInd + 3] = E_phasor[2 * tempInd + 1].getPhase();
+        E_phase_amp[4 * tempInd] = E_phasor[0].getAbsVal();
+        E_phase_amp[4 * tempInd + 1] = E_phasor[0].getPhase();
+        E_phase_amp[4 * tempInd + 2] = E_phasor[1].getAbsVal();
+        E_phase_amp[4 * tempInd + 3] = E_phasor[1].getPhase();
 
         //calculate B phasor
         tempB1 = A[2 * tempInd - 2 * M].subtract(A[2 * tempInd + 2 * M]);
@@ -1910,10 +1910,10 @@ function draw() {
         tempB1 = tempB1.product(const_rFactor2);
         tempB2 = tempB2.product(const_rFactor2);
 
-        B_phasor[tempInd] = tempB2.subtract(tempB1);
+        B_phasor = tempB2.subtract(tempB1);
 
-        B_phase_amp[2 * tempInd] = B_phasor[tempInd].getAbsVal();
-        B_phase_amp[2 * tempInd + 1] = B_phasor[tempInd].getPhase();
+        B_phase_amp[2 * tempInd] = B_phasor.getAbsVal();
+        B_phase_amp[2 * tempInd + 1] = B_phasor.getPhase();
       }
     }
 
