@@ -969,7 +969,7 @@ function draw() {
     flagA = true
    simulate = false
   waitProcess = true
-  processingScheduled = true
+  processingScheduled = false
     mouseRelease = false 
     
     
@@ -1469,7 +1469,7 @@ function draw() {
       one_point = false;
       simulate = false;
       waitProcess = true
-      processingScheduled = true
+      processingScheduled = false
       A_map = new Map()
       EM_phase_amp_map = new Map()
     }
@@ -2279,7 +2279,7 @@ rect(
            amp_slider_process = true;
           simulate = false;
            waitProcess = true
-          processingScheduled = true
+          processingScheduled = false
            A_map = new Map()
           EM_phase_amp_map = new Map()
             
@@ -2386,7 +2386,7 @@ rect(
           phase_slider_process = true;
           simulate = false;
            waitProcess = true
-          processingScheduled = true
+          processingScheduled = false
            A_map = new Map()
           EM_phase_amp_map = new Map()
           antenna.setPhase(
@@ -2483,7 +2483,7 @@ rect(
           phase_slider_process = true;
           simulate = false;
            waitProcess = true
-          processingScheduled = true
+          processingScheduled = false
           A_map = new Map()
           EM_phase_amp_map = new Map()
           antenna.setSep(
