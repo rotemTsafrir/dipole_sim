@@ -1454,11 +1454,11 @@ function draw() {
       (60 / 1000) * windowHeight,
       mouseX,
       mouseY
-    )
+    )&&&&!isMouseInStatBox
   ) {
     fill(120, 120, 120);
 
-    if (mousePressedFlag&&!isMouseInStatBox) {
+    if (mousePressedFlag) {
       antennas = [];
       amp_button_offset = [];
       phase_button_offset = [];
