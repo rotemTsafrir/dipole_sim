@@ -1405,11 +1405,11 @@ function draw() {
       mouseY
     )
   ) {
-    if (!pause && mousePressedFlag) {
+    if (!pause && mousePressedFlag&&!isMouseInStatBox) {
       mousePressedFlag = false;
       mouseRelease = false;
       pause = true;
-    } else if (pause && mousePressedFlag) {
+    } else if (pause && mousePressedFlag&&!isMouseInStatBox) {
       mousePressedFlag = false;
       mouseRelease = false;
       pause = false;
