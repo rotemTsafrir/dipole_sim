@@ -2592,3 +2592,21 @@ function mouseReleased() {
   mouseRelease = true;
   mousePressedFlag = false;
 }
+
+
+function mouseReleased() {
+  mouseRelease = true;
+  mousePressedFlag = false;
+}
+
+
+// Mobile
+function touchStarted() {
+  mousePressedFlag = true;
+  return false; // prevent default scroll
+}
+
+function touchEnded() {
+  mousePressedFlag = false;
+  return false;
+}
