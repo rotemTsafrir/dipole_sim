@@ -1454,7 +1454,7 @@ function draw() {
       (60 / 1000) * windowHeight,
       mouseX,
       mouseY
-    )&&&&!isMouseInStatBox
+    )&&!isMouseInStatBox
   ) {
     fill(120, 120, 120);
 
