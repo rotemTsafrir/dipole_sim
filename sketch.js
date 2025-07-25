@@ -1458,7 +1458,7 @@ function draw() {
   ) {
     fill(120, 120, 120);
 
-    if (mousePressedFlag) {
+    if (mousePressedFlag&&!isMouseInStatBox) {
       antennas = [];
       amp_button_offset = [];
       phase_button_offset = [];
@@ -1496,8 +1496,10 @@ function draw() {
 
   //resolution buttons logic
 
-  let flagChangeRes = false;
+ 
 
+  let flagChangeRes = false;
+ if(!isMouseInStatBox){
   if (
     resolution != 3 &&
     inRect(
@@ -1567,6 +1569,8 @@ function draw() {
     sLength = 5;
     arrow_spacing = 4;
   }
+
+ }
 
   if (flagChangeRes) {
     N = Math.ceil(height / sLength);
