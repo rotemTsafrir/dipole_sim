@@ -2603,10 +2603,12 @@ function mouseReleased() {
 // Mobile
 function touchStarted() {
   mousePressedFlag = true;
+  mouseRelease = false;
   return false; // prevent default scroll
 }
 
 function touchEnded() {
   mousePressedFlag = false;
+  mouseRelease = true;
   return false;
 }
