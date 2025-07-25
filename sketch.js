@@ -926,6 +926,8 @@ function draw() {
 ){
     
   
+    
+  
    if(flagA){
     lastMouseX = mouseX
     lastMouseY = mouseY
@@ -954,12 +956,12 @@ function draw() {
     
      lastMouseX = mouseX
     lastMouseY = mouseY
+   flagA = true
     
   }
   
   
-   console.log(flagB)
-   
+  
    if(flagB && mouseRelease&&!one_point){
     
     
@@ -969,7 +971,7 @@ function draw() {
   waitProcess = true
   processingScheduled = true
     mouseRelease = false 
-     
+    
     
         
  
@@ -1234,6 +1236,7 @@ function draw() {
 
           let amp = defAmp;
           let phase = 0;
+          
 
           dipole = new Dipole(
             c / freq,
