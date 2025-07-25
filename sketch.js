@@ -910,7 +910,7 @@ function setup() {
   flags_phase_button.push(false);
   flags_sep_button.push(false);
   delButtonPressed.push(false);
-  wairProcess = true;
+  wairProcess = false;
   simulate = false;
 }
 
