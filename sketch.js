@@ -1365,6 +1365,7 @@ function draw() {
     dipole_antenna_pressed = false;
     mousePressedFlag = false;
     addNew_dipole_tx = false;
+    one_point = false
     
     
   }
