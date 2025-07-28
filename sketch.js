@@ -729,9 +729,10 @@ function startProcessingNewSetup(){
 
         let key = `${r[0]},${r[1]}`;
         
-        let A_vec = calcA(r[0],r[1])       
+             
         
         if(!A_map.get(key)){
+           let A_vec = calcA(r[0],r[1]) 
         
         A_map.set(key,{x:A_vec[0], y:A_vec[1]})
           
