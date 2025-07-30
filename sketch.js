@@ -2597,7 +2597,7 @@ function mosueWheel() {
     zoom = Math.min(zoomMax, Math.max(zoomMin, zoom));
 
    
-});
+}
 
 
 // Mobile
