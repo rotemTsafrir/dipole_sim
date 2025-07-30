@@ -985,7 +985,7 @@ function draw() {
     }
 
     prevWidth = windowWidth;
-     = windowHeight;
+    prevHeight = windowHeight;
 
     resizeCanvas(windowWidth, windowHeight);
 
