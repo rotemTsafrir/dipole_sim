@@ -2588,15 +2588,15 @@ function mouseReleased() {
 
 
 
-canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    let zoomFactor = e.deltaY > 0 ? 0.9 : 1.1; // Zoom out/in
+function mosueWheel() {
+    
+    let zoomFactor = 1.05
     zoom *= zoomFactor;
 
     // Clamp the zoom value
     zoom = Math.min(zoomMax, Math.max(zoomMin, zoom));
 
-    redraw();
+   
 });
 
 
