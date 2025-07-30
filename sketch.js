@@ -531,6 +531,10 @@ let lastMouseY = 0;
 let const_rFactor1 = (Scale * Scale) / (sLength * sLength);
 let const_rFactor2 = Scale / (2 * sLength);
 
+let zoom = 1.0;        // Current zoom
+const zoomMin = 0.5;   // Lowest allowed zoom (prevents extreme zoom out)
+const zoomMax = 4.0;   // Highest allowed zoom (prevents extreme zoom in)
+
 function squiz(l, k, levels = 256) {
   if (l <= 0) {
     return 0;
@@ -2582,6 +2586,20 @@ function mouseReleased() {
 }
 
 
+
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    let zoomFactor = e.deltaY > 0 ? 0.9 : 1.1; // Zoom out/in
+    zoom *= zoomFactor;
+
+    // Clamp the zoom value
+    zoom = Math.min(zoomMax, Math.max(zoomMin, zoom));
+
+    redraw();
+});
+
+
 // Mobile
 function touchStarted() {
   mousePressedFlag = true;
@@ -2594,3 +2612,7 @@ function touchEnded() {
   mouseRelease = true;
   return false;
 }
+
+
+
+
