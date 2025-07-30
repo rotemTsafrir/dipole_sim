@@ -375,8 +375,8 @@ const Scale = 50;
 let width = 1000;
 let height = 800;
 
-let prevWidth = width;
-let prevHeight = height;
+let prevWidth;
+let prevHeight;
 
 let N = Math.ceil(height / sLength);
 let M = Math.ceil(width / sLength);
@@ -841,6 +841,9 @@ let key_down_right = `${x_coord_r},${y_coord_d}`;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  prevWidth = windowWidth
+  prevHeight = windowHeight
+  
   pixelDensity(1);
   width = Math.round((1 / 1.4) * windowWidth);
   height = Math.round((8 / 10) * windowHeight);
@@ -982,7 +985,7 @@ function draw() {
     }
 
     prevWidth = windowWidth;
-    prevHeight = windowHeight;
+     = windowHeight;
 
     resizeCanvas(windowWidth, windowHeight);
 
