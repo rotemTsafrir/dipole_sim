@@ -847,13 +847,12 @@ let key_down_right = `${x_coord_r},${y_coord_d}`;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
-
+  pixelDensity(1);
   width = Math.round((1 / 1.4) * windowWidth);
   height = Math.round((8 / 10) * windowHeight);
 
-  background(0, 0, 0);
-
-  pixelDensity(1);
+  
+  
 
   current = [];
 
