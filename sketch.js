@@ -435,12 +435,6 @@ let B_phasor;
 //EM field phasor
 let EM_phase_amp_map = new Map();
 
-//electric field at each simulated pixel
-let E = [];
-
-//magnetic field  at each simulated pixel
-let B = [];
-
 let A_map = new Map();
 
 //mouse states
@@ -851,9 +845,6 @@ function setup() {
   width = Math.round((1 / 1.4) * windowWidth);
   height = Math.round((8 / 10) * windowHeight);
 
-  
-  
-
   current = [];
 
   one_point = false;
@@ -866,16 +857,6 @@ function setup() {
     ((c - minSpeed) / (maxSpeed - minSpeed)) *
     ((200 - 30) / 1400) *
     windowWidth;
-
-  for (let i = 0; i < width / sLength; i++) {
-    for (let j = 0; j < height / sLength; j++) {
-      let tempInd = M * j + i;
-
-      E[2 * tempInd] = 0;
-      E[2 * tempInd + 1] = 0;
-      B[tempInd] = 0;
-    }
-  }
 
   background(0); // draw black background
   loadPixels(); // fill the pixel buffer from canvas
