@@ -67,3 +67,5 @@ At the top-right corner of the canvas, you’ll find **three field toggle button
   - Changing frequency or wave speed  
 - Use **"Clear All"** to remove all antennas and reset the canvas.
 - Use **"Pause"** and **"Resume"** to control animation flow.
+- Press the mouse (or press the screen if you have touch screen)  and drag on the canvas to translate it and reveal new areas to be simulated
+
