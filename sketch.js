@@ -1560,16 +1560,6 @@ function draw() {
 
     const_rFactor1 = (Scale * Scale) / (sLength * sLength);
     const_rFactor2 = Scale / (2 * sLength);
-
-    for (let i = 0; i < width / sLength; i++) {
-      for (let j = 0; j < height / sLength; j++) {
-        let tempInd = M * j + i;
-
-        E[2 * tempInd] = 0;
-        E[2 * tempInd + 1] = 0;
-        B[tempInd] = 0;
-      }
-    }
   }
 
   // resolution buttons graphics
