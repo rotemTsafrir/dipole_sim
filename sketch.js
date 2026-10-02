@@ -1,3 +1,15 @@
+/*
+ * EM simulator — CPU optimization, stage 1 (2026-10-02)
+ * Replace your complete p5.js sketch.js with this file; keep your existing p5 setup.
+ * Changes: primitive segment integration; real/imaginary phasors; double-precision
+ * visible arrays; shared frame sine/cosine; one-pixel-per-cell rendering; avoid
+ * redundant segment rebuilds; render the last row/column; restore 60 FPS target.
+ * Panning keeps the original world cache. Amplitude/phase still invalidate fields.
+ * Next stage: per-antenna unit-drive caches and dense-array derivative calculation.
+ * Original physical model, derivatives, softening and display transfer functions
+ * are retained. The energy-flux heatmap is the original proxy, not calibrated |S|.
+ */
+
 // Converted Java abstract class to JavaScript class structure using p5.js-compatible syntax
 
 class Antenna {
@@ -238,6 +250,7 @@ class Dipole extends Antenna {
   }
 
   setDl(new_dl) {
+    if (this.dl === new_dl) return;
     this.dl = new_dl;
     this.setCurrentSegments();
   }
@@ -256,14 +269,12 @@ class Dipole extends Antenna {
 
   setAmp(newAmp) {
     this.amp = newAmp;
-    this.setCurrentSegments();
     this.I0 = ComplexNum.cis(this.phase).product(newAmp);
   }
 
   setPhase(newPhase) {
     this.phase = newPhase;
     this.I0 = ComplexNum.cis(newPhase).product(this.amp);
-    this.setCurrentSegments();
   }
 
   setWavelength(newWavelength) {
@@ -433,6 +444,7 @@ let E_phasor = [];
 let B_phasor;
 
 //EM field phasor
+// World-coordinate cache for setup/panning only; values are Cartesian phasors.
 let EM_phase_amp_map = new Map();
 
 let A_map = new Map();
@@ -649,46 +661,35 @@ function thickLine(p1, p2, thickness, c) {
   endShape();
 }
 
+// Same softened Green function and segment weights as the original.
+// Allocate only the two result objects, never inside the segment loop.
 function calcA(myX, myY) {
-  let A = [];
-
-  A[0] = zero;
-  A[1] = zero;
-
+  let axRe = 0, axIm = 0, ayRe = 0, ayIm = 0;
   for (let i = 0; i < antennas.length; i++) {
-    antenna = antennas[i];
-
-    segments = antenna.getSegments();
-
-    currents = antenna.getCurrentSegments();
-
+    const antenna = antennas[i];
+    const segments = antenna.getSegments();
+    const currents = antenna.getCurrentSegments();
+    const dl = antenna.getDl();
+    const drive = antenna.getI0();
+    const driveRe = drive.a, driveIm = drive.b;
     for (let j = 0; j < segments.length; j++) {
-      let r_tag = [segments[j][0], segments[j][1]];
-       
-      let distance = length2D([myX,myY], r_tag);
-
-      //for numerical stability near current sources
-      distance = distance + 0.1;
-
-      current[0] = new ComplexNum(currents[j][0] * antenna.getDl(), 0).product(
-        antenna.getI0()
-      );
-      current[1] = new ComplexNum(currents[j][1] * antenna.getDl(), 0).product(
-        antenna.getI0()
-      );
-
-      phase = ComplexNum.cis(-k * distance);
-
-      factor = phase.product(1 / distance);
-
-      A[0] = A[0].add(current[0].product(factor));
-      A[1] = A[1].add(current[1].product(factor));
-           
-      
+      const dx = myX - segments[j][0];
+      const dy = myY - segments[j][1];
+      const distance = Math.sqrt(dx * dx + dy * dy) + 0.1;
+      const invR = 1 / distance;
+      const gRe = Math.cos(-k * distance) * invR;
+      const gIm = Math.sin(-k * distance) * invR;
+      const jx = currents[j][0] * dl;
+      const jy = currents[j][1] * dl;
+      const jxRe = jx * driveRe, jxIm = jx * driveIm;
+      const jyRe = jy * driveRe, jyIm = jy * driveIm;
+      axRe += jxRe * gRe - jxIm * gIm;
+      axIm += jxRe * gIm + jxIm * gRe;
+      ayRe += jyRe * gRe - jyIm * gIm;
+      ayIm += jyRe * gIm + jyIm * gRe;
     }
   }
-  
-  return A
+  return [new ComplexNum(axRe, axIm), new ComplexNum(ayRe, ayIm)];
 }
 
 function startProcessingNewSetup(){
@@ -739,8 +740,8 @@ function startProcessingNewSetup(){
     }
     
     
-for (let i = 0; i + 1 < width / sLength; i++) {
-  for (let j = 0; j + 1 < height / sLength; j++) {
+for (let i = 0; i < M; i++) {
+  for (let j = 0; j < N; j++) {
    // Compute coordinates
 let x_coord_c = conMyX(i * sLength);
 
@@ -822,22 +823,82 @@ let key_down_right = `${x_coord_r},${y_coord_d}`;
 
     // Store in EM_phase_amp_map
     EM_phase_amp_map.set(key_center, {
-      Ex_amp: E_phasor[0].getAbsVal(),
-      Ex_phase: E_phasor[0].getPhase(),
-      Ey_amp: E_phasor[1].getAbsVal(),
-      Ey_phase: E_phasor[1].getPhase(),
-      B_amp: B_phasor.getAbsVal(),
-      B_phase: B_phasor.getPhase()
+      ExRe: E_phasor[0].a,
+      ExIm: E_phasor[0].b,
+      EyRe: E_phasor[1].a,
+      EyIm: E_phasor[1].b,
+      BRe: B_phasor.a,
+      BIm: B_phasor.b
     });
   }
 }
 }
+    refreshVisibleFields(true);
     waitProcess = false;
     simulate = true;
   
   processingScheduled =  false
 }
 
+
+// Stage 1: keep double precision to avoid introducing quantization changes.
+// The string-keyed world cache is read only when the view or setup changes.
+let visibleFields = null;
+let fieldImage = null;
+let visibleCache = null;
+let visibleOriginX = NaN, visibleOriginY = NaN, visibleStep = NaN;
+let frameCos = 1, frameSin = 0, lastFramePhase = NaN;
+
+function updateFramePhase() {
+  const theta = timeSim * 2 * Math.PI * freq;
+  if (theta !== lastFramePhase) {
+    frameCos = Math.cos(theta);
+    frameSin = Math.sin(theta);
+    lastFramePhase = theta;
+  }
+}
+
+function refreshVisibleFields(force = false) {
+  const cols = Math.ceil(width / sLength);
+  const rows = Math.ceil(height / sLength);
+  const ox = Math.round(-orig[0] / sLength);
+  const oy = Math.round(orig[1] / sLength);
+  const resized = !visibleFields || visibleFields.cols !== cols ||
+                  visibleFields.rows !== rows;
+  if (!force && !resized && visibleCache === EM_phase_amp_map &&
+      visibleOriginX === ox && visibleOriginY === oy && visibleStep === sLength) return;
+  if (resized) {
+    const size = cols * rows;
+    visibleFields = {
+      cols, rows,
+      ExRe: new Float64Array(size), ExIm: new Float64Array(size),
+      EyRe: new Float64Array(size), EyIm: new Float64Array(size),
+      BRe: new Float64Array(size), BIm: new Float64Array(size),
+      valid: new Uint8Array(size)
+    };
+    fieldImage = createImage(cols, rows);
+    fieldImage.loadPixels();
+  }
+  const f = visibleFields;
+  for (let j = 0; j < rows; j++) {
+    const y = conMyY(j * sLength);
+    for (let i = 0; i < cols; i++) {
+      const idx = j * cols + i;
+      const data = EM_phase_amp_map.get(`${conMyX(i * sLength)},${y}`);
+      f.valid[idx] = data ? 1 : 0;
+      f.ExRe[idx] = data ? data.ExRe : 0;
+      f.ExIm[idx] = data ? data.ExIm : 0;
+      f.EyRe[idx] = data ? data.EyRe : 0;
+      f.EyIm[idx] = data ? data.EyIm : 0;
+      f.BRe[idx] = data ? data.BRe : 0;
+      f.BIm[idx] = data ? data.BIm : 0;
+    }
+  }
+  visibleCache = EM_phase_amp_map;
+  visibleOriginX = ox;
+  visibleOriginY = oy;
+  visibleStep = sLength;
+}
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -861,10 +922,8 @@ function setup() {
     ((200 - 30) / 1400) *
     windowWidth;
 
-  background(0); // draw black background
-  loadPixels(); // fill the pixel buffer from canvas
-
-  updatePixels(); // commit black pixels to canvas
+  background(0);
+  frameRate(60);
 
   let myP1 = [conMyX(0.05 + width / 2), conMyY((2 * height) / 3)];
   let myP2 = [conMyX(width / 2), conMyY(height / 3)];
@@ -962,9 +1021,7 @@ function draw() {
   }
   
   
-  if (resolution == 3) {
-    frameRate(20);
-  }
+  // All resolutions use the 60 FPS target; work per frame determines actual FPS.
 
 
   if (windowWidth != prevWidth || windowHeight != prevHeight) {
@@ -977,12 +1034,10 @@ function draw() {
       sep_button_offset[b] *= windowWidth / prevWidth;
     }
 
-    if (simulate) {
-      if (prevWidth < windowWidth || prevHeight < windowHeight) {
-        simulate = false;
-        waitProcess = true;
-      }
-    }
+    // Repack the flat visible grid on both growth and shrinkage.
+    simulate = false;
+    waitProcess = true;
+    processingScheduled = false;
 
     prevWidth = windowWidth;
     prevHeight = windowHeight;
@@ -1001,41 +1056,17 @@ function draw() {
     }
     time = millis() / timeScale;
 
-    timePhase = ComplexNum.cis(timeSim * w);
-
-    let pixelIndex = 0;
-
-    // Load the pixel buffer once at the start
-    // Load the pixel buffer once at the start
-
-    loadPixels();
-
-    for (let i = 0; i  < width / sLength; i++) {
-      for (let j = 0; j < height / sLength; j++) {
-        let screenX = sLength * i;
-        let screenY = sLength * j;
-
-        // Convert to coordinate key
-        let x_coord = conMyX(i * sLength);
-        let y_coord = conMyY(j * sLength);
-        let key = `${x_coord},${y_coord}`;
-
-        // Get EM data from the map
-        let data = EM_phase_amp_map.get(key);
-        if (!data) continue; // Safety check
-
-        // Extract precomputed amplitude and phase
-        let Ex_amp = data.Ex_amp;
-        let Ex_phase = data.Ex_phase;
-        let Ey_amp = data.Ey_amp;
-        let Ey_phase = data.Ey_phase;
-        let B_amp = data.B_amp;
-        let B_phase = data.B_phase;
-
-        // Calculate real-time values for E and B
-        let Ex_t = Ex_amp * Math.cos(Ex_phase + timeSim * w);
-        let Ey_t = Ey_amp * Math.cos(Ey_phase + timeSim * w);
-        let B_t = B_amp * Math.cos(B_phase + timeSim * w);
+    updateFramePhase();
+    refreshVisibleFields();
+    const f = visibleFields;
+    const fieldPixels = fieldImage.pixels;
+    const ct = frameCos, st = frameSin;
+    for (let j = 0; j < f.rows; j++) {
+      for (let i = 0; i < f.cols; i++) {
+        const idx = j * f.cols + i;
+        const Ex_t = f.ExRe[idx] * ct - f.ExIm[idx] * st;
+        const Ey_t = f.EyRe[idx] * ct - f.EyIm[idx] * st;
+        const B_t = f.BRe[idx] * ct - f.BIm[idx] * st;
 
         // Color calculation
         let r, g, b, a;
@@ -1140,27 +1171,23 @@ function draw() {
           a = colorSizeEnergyA;
         }
 
-        // Draw block
-        let maxX = width;
-        let maxY = height;
-        let endX = Math.min(screenX + sLength, maxX);
-        let endY = Math.min(screenY + sLength, maxY);
-
-        if (screenX < maxX && screenY < maxY) {
-          for (let di = 0; di < sLength; di++) {
-            for (let dj = 0; dj < sLength; dj++) {
-              let pixelIndex =
-                ((j * sLength + dj) * windowWidth + i * sLength + di) * 4;
-              pixels[pixelIndex] = r * a;
-              pixels[pixelIndex + 1] = g * a;
-              pixels[pixelIndex + 2] = b * a;
-            }
-          }
-        }
+        // One pixel per field cell. RGB already includes the original brightness.
+        const pixelIndex = idx * 4;
+        fieldPixels[pixelIndex] = r * a;
+        fieldPixels[pixelIndex + 1] = g * a;
+        fieldPixels[pixelIndex + 2] = b * a;
+        fieldPixels[pixelIndex + 3] = 255;
       }
     }
-
-    updatePixels();
+    fieldImage.updatePixels();
+    // Preserve exact cell size and clip partial edge cells rather than stretching.
+    drawingContext.save();
+    drawingContext.beginPath();
+    drawingContext.rect(0, 0, width, height);
+    drawingContext.clip();
+    drawingContext.imageSmoothingEnabled = false;
+    image(fieldImage, 0, 0, f.cols * sLength, f.rows * sLength);
+    drawingContext.restore();
   }
 
   
@@ -2029,35 +2056,19 @@ rect(
   //after processing
 
   if (simulate) {
-    w = 2 * Math.PI * freq;
-
-    timePhase = ComplexNum.cis(timeSim * w);
-
-    for (let i = 0; i < width / sLength; i += arrow_spacing) {
-      for (let j = 0; j < height / sLength; j += arrow_spacing) {
-        let screenX = sLength * i;
-        let screenY = sLength * j;
-
-        // Convert to coordinate key
-        let x_coord = conMyX(i * sLength);
-        let y_coord = conMyY(j * sLength);
-        let key = `${x_coord},${y_coord}`;
-
-        // Retrieve data from the map
-        let data = EM_phase_amp_map.get(key);
-        if (!data) continue;
-
-        let Ex_amp = data.Ex_amp;
-        let Ex_phase = data.Ex_phase;
-        let Ey_amp = data.Ey_amp;
-        let Ey_phase = data.Ey_phase;
-        let B_amp = data.B_amp;
-        let B_phase = data.B_phase;
-
-        // Compute real-time values
-        let Ex_t = Ex_amp * Math.cos(Ex_phase + timeSim * w);
-        let Ey_t = Ey_amp * Math.cos(Ey_phase + timeSim * w);
-        let B_t = B_amp * Math.cos(B_phase + timeSim * w);
+    updateFramePhase();
+    refreshVisibleFields();
+    const f = visibleFields;
+    const ct = frameCos, st = frameSin;
+    for (let i = 0; i < f.cols; i += arrow_spacing) {
+      for (let j = 0; j < f.rows; j += arrow_spacing) {
+        const screenX = sLength * i;
+        const screenY = sLength * j;
+        const idx = j * f.cols + i;
+        if (!f.valid[idx]) continue;
+        const Ex_t = f.ExRe[idx] * ct - f.ExIm[idx] * st;
+        const Ey_t = f.EyRe[idx] * ct - f.EyIm[idx] * st;
+        const B_t = f.BRe[idx] * ct - f.BIm[idx] * st;
 
         // === Draw E field arrows ===
         if (show_EField) {
@@ -2121,11 +2132,9 @@ rect(
             currentSegement[1] * currentSegement[1]
         );
 
-        currentPhasor = antenna.getI0().product(currentAmp);
-
-        let currentMag = Math.abs(currentPhasor.product(timePhase).getA());
-
-        let currentColorMag = 255 * squiz(currentMag, k8, (levels = 256));
+        const drive = antenna.getI0();
+        const currentMag = Math.abs(currentAmp * (drive.a * ct - drive.b * st));
+        const currentColorMag = 255 * squiz(currentMag, k8, 256);
 
         if (
           antenna.getSegFlags()[j] &&
@@ -2589,7 +2598,6 @@ function touchEnded() {
   mouseRelease = true;
   return false;
 }
-
 
 
 
