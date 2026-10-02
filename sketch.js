@@ -1,11 +1,12 @@
 /*
- * EM simulator — CPU optimization, stage 1 (2026-10-02)
+ * EM simulator — CPU optimization, stage 2 (2026-10-02)
  * Replace your complete p5.js sketch.js with this file; keep your existing p5 setup.
  * Changes: primitive segment integration; real/imaginary phasors; double-precision
  * visible arrays; shared frame sine/cosine; one-pixel-per-cell rendering; avoid
  * redundant segment rebuilds; render the last row/column; restore 60 FPS target.
- * Panning keeps the original world cache. Amplitude/phase still invalidate fields.
- * Next stage: per-antenna unit-drive caches and dense-array derivative calculation.
+ * Stage 2: per-antenna unit-drive vector-potential grids, overlap reuse on pan,
+ * numeric derivative stencils and immediate recombination on slider release.
+ * Double-precision caches are bounded to the last viewport per antenna.
  * Original physical model, derivatives, softening and display transfer functions
  * are retained. The energy-flux heatmap is the original proxy, not calibrated |S|.
  */
@@ -692,152 +693,139 @@ function calcA(myX, myY) {
   return [new ComplexNum(axRe, axIm), new ComplexNum(ayRe, ayIm)];
 }
 
-function startProcessingNewSetup(){
-  for (let i = 0; i < antennas.length; i++) {
-          antenna = antennas[i];
+// Each antenna owns one double-precision unit-drive A grid with a one-cell halo.
+// WeakMap entries disappear with deleted antennas; panning retains only the last
+// viewport per antenna, reusing its overlap instead of growing an unbounded cache.
+let antennaBasisCache = new WeakMap();
+let fieldWork = null;
+let fieldCacheSignature = null;
+let lastProcessingStats = null;
 
-          if (resolution == 1) {
-            antenna.setDl(dl_lr);
-          } else if (resolution == 2) {
-            antenna.setDl(dl_mr);
-          } else {
-            antenna.setDl(dl_hr);
-          }
-        }
-    
-    
-    
-    
-     k = (2 * Math.PI * freq) / c;
-
-    cFACTOR1 = new ComplexNum(0, -2 * Math.PI * freq);
-    cFACTOR2 = new ComplexNum(0, -c / k);
-    N = Math.ceil(height / sLength);
-    M = Math.ceil(width / sLength);
-    
-
-    for (let y = -sLength; y < height+sLength; y += sLength) {
-      for (let x = -sLength; x < width+sLength; x += sLength) {
-      
-        r[0] = conMyX(x);
-        r[1] = conMyY(y);
-
-        let key = `${r[0]},${r[1]}`;
-        
-             
-        
-        if(!A_map.get(key)){
-           let A_vec = calcA(r[0],r[1]) 
-        
-        A_map.set(key,{x:A_vec[0], y:A_vec[1]})
-          
-        }
-        
-        
-  
-        
-      }
-    }
-    
-    
-for (let i = 0; i < M; i++) {
-  for (let j = 0; j < N; j++) {
-   // Compute coordinates
-let x_coord_c = conMyX(i * sLength);
-
-let x_coord_l = conMyX((i - 1) * sLength);
-let x_coord_r = conMyX((i + 1) * sLength);
-
-let y_coord_c = conMyY(j * sLength);
-let y_coord_u = conMyY((j - 1) * sLength);
-let y_coord_d = conMyY((j + 1) * sLength);
-    
-    
-    if(! EM_phase_amp_map.get(`${x_coord_c},${y_coord_c}`)){
-
-// Neighbor keys (using corrected variables)
-let key_center = `${x_coord_c},${y_coord_c}`;
-let key_up = `${x_coord_c},${y_coord_u}`;
-let key_down = `${x_coord_c},${y_coord_d}`;
-let key_left = `${x_coord_l},${y_coord_c}`;
-let key_right = `${x_coord_r},${y_coord_c}`;
-let key_up_left = `${x_coord_l},${y_coord_u}`;
-let key_up_right = `${x_coord_r},${y_coord_u}`;
-let key_down_left = `${x_coord_l},${y_coord_d}`;
-let key_down_right = `${x_coord_r},${y_coord_d}`;
-
-
-    // Fetch from A_map
-    let A_center = A_map.get(key_center);
-    let A_up = A_map.get(key_up);
-    let A_down = A_map.get(key_down);
-    let A_left = A_map.get(key_left);
-    let A_right = A_map.get(key_right);
-    let A_up_left = A_map.get(key_up_left);
-    let A_up_right = A_map.get(key_up_right);
-    let A_down_left = A_map.get(key_down_left);
-    let A_down_right = A_map.get(key_down_right);
-    
-    
-
-    if (!A_center || !A_up || !A_down || !A_left || !A_right) continue; // Safety
-      
-    // --- Calculate E phasor ---
-    let E_phasor = [];
-    E_phasor[0] = A_center.x.product(cFACTOR1);
-    E_phasor[1] = A_center.y.product(cFACTOR1);
-
-    // Compute tempE1 (second derivatives along x and y)
-    let tempE1 = [];
-    tempE1[0] = A_right.x.add(A_left.x).add(A_center.x.product(-2));
-    tempE1[1] = A_up.y.add(A_down.y).add(A_center.y.product(-2));
-
-    tempE1[0] = tempE1[0].product(const_rFactor1);
-    tempE1[1] = tempE1[1].product(const_rFactor1);
-
-    // Compute tempE2 (cross derivatives)
-    let tempE2 = [];
-    if (A_up_right && A_down_left && A_down_right && A_up_left) {
-      tempE2[0] = A_down_left.y.add(A_up_right.y).subtract(A_down_right.y.add(A_up_left.y));
-      tempE2[1] = A_down_left.x.add(A_up_right.x).subtract(A_down_right.x.add(A_up_left.x));
-    } else {
-      tempE2[0] = new ComplexNum(0, 0);
-      tempE2[1] = new ComplexNum(0, 0);
-    }
-
-    tempE2[0] = tempE2[0].product(0.25 * const_rFactor1);
-    tempE2[1] = tempE2[1].product(0.25 * const_rFactor1);
-
-    // Combine
-    let tempE = [];
-    tempE[0] = tempE1[0].add(tempE2[0]).product(cFACTOR2);
-    tempE[1] = tempE1[1].add(tempE2[1]).product(cFACTOR2);
-
-    E_phasor[0] = E_phasor[0].add(tempE[0]);
-    E_phasor[1] = E_phasor[1].add(tempE[1]);
-
-    // --- Calculate B phasor ---
-    let tempB1 = A_up.x.subtract(A_down.x).product(const_rFactor2);
-    let tempB2 = A_right.y.subtract(A_left.y).product(const_rFactor2);
-    let B_phasor = tempB2.subtract(tempB1);
-
-    // Store in EM_phase_amp_map
-    EM_phase_amp_map.set(key_center, {
-      ExRe: E_phasor[0].a,
-      ExIm: E_phasor[0].b,
-      EyRe: E_phasor[1].a,
-      EyIm: E_phasor[1].b,
-      BRe: B_phasor.a,
-      BIm: B_phasor.b
-    });
+function unitPotentialGrid(antenna, cols, rows, x0, y0, stats) {
+  const old = antennaBasisCache.get(antenna);
+  const step = sLength / Scale;
+  const reusable = old && old.segments === antenna.segments &&
+    old.currents === antenna.currentSegments && old.dl === antenna.dl &&
+    old.k === k && old.step === step;
+  if (reusable && old.cols === cols && old.rows === rows && old.x0 === x0 && old.y0 === y0) {
+    stats.reusedSamples += cols * rows;
+    return old;
   }
+  const size = cols * rows;
+  const grid = { cols, rows, x0, y0, step, k, dl: antenna.dl,
+    segments: antenna.segments, currents: antenna.currentSegments,
+    axRe: new Float64Array(size), axIm: new Float64Array(size),
+    ayRe: new Float64Array(size), ayIm: new Float64Array(size) };
+  const segments = antenna.segments, currents = antenna.currentSegments;
+  for (let j = 0; j < rows; j++) {
+    const gy = y0 - j;
+    const oldRow = reusable ? old.y0 - gy : -1;
+    for (let i = 0; i < cols; i++) {
+      const gx = x0 + i, idx = j * cols + i;
+      const oldCol = reusable ? gx - old.x0 : -1;
+      if (reusable && oldCol >= 0 && oldCol < old.cols && oldRow >= 0 && oldRow < old.rows) {
+        const src = oldRow * old.cols + oldCol;
+        grid.axRe[idx] = old.axRe[src]; grid.axIm[idx] = old.axIm[src];
+        grid.ayRe[idx] = old.ayRe[src]; grid.ayIm[idx] = old.ayIm[src];
+        stats.reusedSamples++;
+        continue;
+      }
+      const x = gx * step, y = gy * step;
+      let xr = 0, xi = 0, yr = 0, yi = 0;
+      for (let n = 0; n < segments.length; n++) {
+        const dx = x - segments[n][0], dy = y - segments[n][1];
+        const distance = Math.sqrt(dx * dx + dy * dy) + 0.1;
+        const gr = Math.cos(-k * distance) / distance;
+        const gi = Math.sin(-k * distance) / distance;
+        const jx = currents[n][0] * antenna.dl, jy = currents[n][1] * antenna.dl;
+        xr += jx * gr; xi += jx * gi;
+        yr += jy * gr; yi += jy * gi;
+      }
+      grid.axRe[idx] = xr; grid.axIm[idx] = xi;
+      grid.ayRe[idx] = yr; grid.ayIm[idx] = yi;
+      stats.integratedSamples++;
+    }
+  }
+  antennaBasisCache.set(antenna, grid);
+  return grid;
 }
-}
-    refreshVisibleFields(true);
-    waitProcess = false;
-    simulate = true;
-  
-  processingScheduled =  false
+
+function startProcessingNewSetup() {
+  const begin = performance.now();
+  const dl = resolution === 1 ? dl_lr : resolution === 2 ? dl_mr : dl_hr;
+  for (const a of antennas) a.setDl(dl);
+  k = 2 * Math.PI * freq / c;
+  N = Math.ceil(height / sLength); M = Math.ceil(width / sLength);
+  const cols = M + 2, rows = N + 2, size = cols * rows;
+  const x0 = Math.round(-orig[0] / sLength) - 1;
+  const y0 = Math.round(orig[1] / sLength) + 1;
+  const stats = {integratedSamples: 0, reusedSamples: 0, antennaCount: antennas.length};
+
+  // Detect changes independently of UI invalidation, including deletion/reordering.
+  const signature = {freq, c, sLength, antennas: antennas.map(a => ({
+    antenna: a, segments: a.segments, currents: a.currentSegments, dl: a.dl,
+    re: a.I0.a, im: a.I0.b
+  }))};
+  const prev = fieldCacheSignature;
+  const same = prev && prev.freq === freq && prev.c === c && prev.sLength === sLength &&
+    prev.antennas.length === antennas.length && signature.antennas.every((a,i) => {
+      const b = prev.antennas[i];
+      return a.antenna === b.antenna && a.segments === b.segments &&
+        a.currents === b.currents && a.dl === b.dl && a.re === b.re && a.im === b.im;
+    });
+  // Limit the aggregate panning cache to roughly four current viewports.
+  if (!same || EM_phase_amp_map.size > 4 * M * N) EM_phase_amp_map = new Map();
+  fieldCacheSignature = signature;
+
+  if (!fieldWork || fieldWork.axRe.length !== size) {
+    fieldWork = {axRe:new Float64Array(size),axIm:new Float64Array(size),
+                 ayRe:new Float64Array(size),ayIm:new Float64Array(size)};
+  } else {
+    fieldWork.axRe.fill(0); fieldWork.axIm.fill(0);
+    fieldWork.ayRe.fill(0); fieldWork.ayIm.fill(0);
+  }
+  const {axRe,axIm,ayRe,ayIm} = fieldWork;
+  for (const a of antennas) {
+    const g = unitPotentialGrid(a, cols, rows, x0, y0, stats);
+    const re = a.I0.a, im = a.I0.b;
+    for (let n = 0; n < size; n++) {
+      axRe[n] += re * g.axRe[n] - im * g.axIm[n];
+      axIm[n] += re * g.axIm[n] + im * g.axRe[n];
+      ayRe[n] += re * g.ayRe[n] - im * g.ayIm[n];
+      ayIm[n] += re * g.ayIm[n] + im * g.ayRe[n];
+    }
+  }
+  // Derivatives of the combined A are equivalent to combining per-antenna E/B.
+  // Do the finite-difference stencil just once, using numeric array neighbors.
+  const d2 = Scale * Scale / (sLength * sLength);
+  const d1 = Scale / (2 * sLength), omega = 2 * Math.PI * freq, ck = c / k;
+  for (let j = 0; j < N; j++) {
+    const y = conMyY(j * sLength);
+    for (let i = 0; i < M; i++) {
+      const n = (j + 1) * cols + i + 1;
+      const l = n - 1, r = n + 1, u = n - cols, d = n + cols;
+      const xxr = (axRe[r] + axRe[l] - 2 * axRe[n]) * d2;
+      const xxi = (axIm[r] + axIm[l] - 2 * axIm[n]) * d2;
+      const yyr = (ayRe[u] + ayRe[d] - 2 * ayRe[n]) * d2;
+      const yyi = (ayIm[u] + ayIm[d] - 2 * ayIm[n]) * d2;
+      const xyyr = (ayRe[d-1] + ayRe[u+1] - (ayRe[d+1] + ayRe[u-1])) * 0.25 * d2;
+      const xyyi = (ayIm[d-1] + ayIm[u+1] - (ayIm[d+1] + ayIm[u-1])) * 0.25 * d2;
+      const xyxr = (axRe[d-1] + axRe[u+1] - (axRe[d+1] + axRe[u-1])) * 0.25 * d2;
+      const xyxi = (axIm[d-1] + axIm[u+1] - (axIm[d+1] + axIm[u-1])) * 0.25 * d2;
+      EM_phase_amp_map.set(`${conMyX(i * sLength)},${y}`, {
+        ExRe: omega * axIm[n] + ck * (xxi + xyyi),
+        ExIm: -omega * axRe[n] - ck * (xxr + xyyr),
+        EyRe: omega * ayIm[n] + ck * (yyi + xyxi),
+        EyIm: -omega * ayRe[n] - ck * (yyr + xyxr),
+        BRe: (ayRe[r] - ayRe[l]) * d1 - (axRe[u] - axRe[d]) * d1,
+        BIm: (ayIm[r] - ayIm[l]) * d1 - (axIm[u] - axIm[d]) * d1
+      });
+    }
+  }
+  refreshVisibleFields(true);
+  waitProcess = false; simulate = true; processingScheduled = false;
+  stats.elapsedMs = performance.now() - begin;
+  lastProcessingStats = stats;
 }
 
 
@@ -2275,6 +2263,7 @@ rect(
             (maxAmp * amp_button_offset[b]) /
               ((windowWidth * (300 - 40)) / 1400)
           );
+          startProcessingNewSetup();
 
             
           }
@@ -2385,7 +2374,8 @@ rect(
                 (12 * phase_button_offset[b]) /
                   ((windowWidth * (300 - 40)) / 1400)
               )
-          );  
+          );
+          startProcessingNewSetup();  
             
           }
         }
