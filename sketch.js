@@ -1,3 +1,4 @@
+// Zoom update: wheel over the field; 0 resets magnification. Range 50%-400%.
 /*
  * EM simulator — CPU optimization, stage 2 (2026-10-02)
  * Replace your complete p5.js sketch.js with this file; keep your existing p5 setup.
@@ -382,7 +383,54 @@ const dl_mr = 0.1;
 const dl_lr = 0.2;
 
 //spacial scaling factor
-const Scale = 50;
+const Scale = 50; // Fixed physics scale; camera magnification is independent.
+let zoom = 1;
+const MIN_ZOOM = 0.5, MAX_ZOOM = 4;
+let zoomRebuildAfter = 0;
+
+function gridView() {
+  const cell = sLength * zoom;
+  const x0 = Math.floor(-orig[0] / cell);
+  const y0 = Math.ceil(orig[1] / cell);
+  const drawX = orig[0] + x0 * cell;
+  const drawY = orig[1] - y0 * cell;
+  return {x0, y0, drawX, drawY, cell,
+    cols: Math.ceil((width - drawX) / cell),
+    rows: Math.ceil((height - drawY) / cell)};
+}
+
+function setViewZoom(value, screenX, screenY) {
+  const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+  if (!Number.isFinite(next) || next === zoom || one_point) return;
+  // Preserve the exact world coordinate beneath the cursor (without snapping).
+  const ratio = next / zoom;
+  orig[0] = screenX - (screenX - orig[0]) * ratio;
+  orig[1] = screenY - (screenY - orig[1]) * ratio;
+  zoom = next;
+  waitProcess = true;
+  processingScheduled = false;
+  zoomRebuildAfter = millis() + 100;
+}
+
+function mouseWheel(event) {
+  if (!inRect(0, 0, width, height, mouseX, mouseY)) return;
+  const overBox = antennas.some(a => a.getShowBox() && inRect(
+    conScreenX(a.getXBox()), conScreenY(a.getYBox()),
+    windowWidth * 400 / 1400, windowHeight * 370 / 1000, mouseX, mouseY));
+  if (overBox || one_point || mousePressedFlag) return false;
+  let delta = event.deltaY === undefined ? event.delta : event.deltaY;
+  if (event.deltaMode === 1) delta *= 16;
+  else if (event.deltaMode === 2) delta *= height;
+  if (Number.isFinite(delta)) setViewZoom(zoom * Math.exp(-Math.max(-500, Math.min(500, delta)) * 0.0015), mouseX, mouseY);
+  return false;
+}
+
+function keyPressed(event) {
+  if (key === '0' && !(event && (event.ctrlKey || event.metaKey || event.altKey))) {
+    setViewZoom(1, width / 2, height / 2);
+    return false;
+  }
+}
 
 let width = 1000;
 let height = 800;
@@ -562,19 +610,19 @@ function length2D(p1, p2) {
 }
 
 function conMyX(x) {
-  return (sLength/(Scale))*Math.round((x - orig[0])/sLength );
+  return (sLength / Scale) * Math.round((x - orig[0]) / (sLength * zoom));
 }
 
 function conMyY(y) {
-  return (sLength/(Scale))*Math.round((orig[1] - y)/sLength );
+  return (sLength / Scale) * Math.round((orig[1] - y) / (sLength * zoom));
 }
 
 function conScreenX(x) {
-  return x * Scale + orig[0];
+  return x * Scale * zoom + orig[0];
 }
 
 function conScreenY(y) {
-  return orig[1] - y * Scale;
+  return orig[1] - y * Scale * zoom;
 }
 
 function inRect(xRect, yRect, W, H, xPoint, yPoint) {
@@ -755,10 +803,11 @@ function startProcessingNewSetup() {
   const dl = resolution === 1 ? dl_lr : resolution === 2 ? dl_mr : dl_hr;
   for (const a of antennas) a.setDl(dl);
   k = 2 * Math.PI * freq / c;
-  N = Math.ceil(height / sLength); M = Math.ceil(width / sLength);
+  const view = gridView();
+  N = view.rows; M = view.cols;
   const cols = M + 2, rows = N + 2, size = cols * rows;
-  const x0 = Math.round(-orig[0] / sLength) - 1;
-  const y0 = Math.round(orig[1] / sLength) + 1;
+  const x0 = view.x0 - 1;
+  const y0 = view.y0 + 1;
   const stats = {integratedSamples: 0, reusedSamples: 0, antennaCount: antennas.length};
 
   // Detect changes independently of UI invalidation, including deletion/reordering.
@@ -800,7 +849,7 @@ function startProcessingNewSetup() {
   const d2 = Scale * Scale / (sLength * sLength);
   const d1 = Scale / (2 * sLength), omega = 2 * Math.PI * freq, ck = c / k;
   for (let j = 0; j < N; j++) {
-    const y = conMyY(j * sLength);
+    const y = (view.y0 - j) * (sLength / Scale);
     for (let i = 0; i < M; i++) {
       const n = (j + 1) * cols + i + 1;
       const l = n - 1, r = n + 1, u = n - cols, d = n + cols;
@@ -812,7 +861,7 @@ function startProcessingNewSetup() {
       const xyyi = (ayIm[d-1] + ayIm[u+1] - (ayIm[d+1] + ayIm[u-1])) * 0.25 * d2;
       const xyxr = (axRe[d-1] + axRe[u+1] - (axRe[d+1] + axRe[u-1])) * 0.25 * d2;
       const xyxi = (axIm[d-1] + axIm[u+1] - (axIm[d+1] + axIm[u-1])) * 0.25 * d2;
-      EM_phase_amp_map.set(`${conMyX(i * sLength)},${y}`, {
+      EM_phase_amp_map.set(`${(view.x0 + i) * (sLength / Scale)},${y}`, {
         ExRe: omega * axIm[n] + ck * (xxi + xyyi),
         ExIm: -omega * axRe[n] - ck * (xxr + xyyr),
         EyRe: omega * ayIm[n] + ck * (yyi + xyxi),
@@ -847,10 +896,13 @@ function updateFramePhase() {
 }
 
 function refreshVisibleFields(force = false) {
-  const cols = Math.ceil(width / sLength);
-  const rows = Math.ceil(height / sLength);
-  const ox = Math.round(-orig[0] / sLength);
-  const oy = Math.round(orig[1] / sLength);
+  const view = gridView();
+  const cols = view.cols, rows = view.rows;
+  const ox = view.x0, oy = view.y0;
+  if (visibleFields) {
+    visibleFields.drawX = view.drawX; visibleFields.drawY = view.drawY;
+    visibleFields.cell = view.cell;
+  }
   const resized = !visibleFields || visibleFields.cols !== cols ||
                   visibleFields.rows !== rows;
   if (!force && !resized && visibleCache === EM_phase_amp_map &&
@@ -858,7 +910,7 @@ function refreshVisibleFields(force = false) {
   if (resized) {
     const size = cols * rows;
     visibleFields = {
-      cols, rows,
+      cols, rows, drawX: view.drawX, drawY: view.drawY, cell: view.cell,
       ExRe: new Float64Array(size), ExIm: new Float64Array(size),
       EyRe: new Float64Array(size), EyIm: new Float64Array(size),
       BRe: new Float64Array(size), BIm: new Float64Array(size),
@@ -869,10 +921,10 @@ function refreshVisibleFields(force = false) {
   }
   const f = visibleFields;
   for (let j = 0; j < rows; j++) {
-    const y = conMyY(j * sLength);
+    const y = (oy - j) * (sLength / Scale);
     for (let i = 0; i < cols; i++) {
       const idx = j * cols + i;
-      const data = EM_phase_amp_map.get(`${conMyX(i * sLength)},${y}`);
+      const data = EM_phase_amp_map.get(`${(ox + i) * (sLength / Scale)},${y}`);
       f.valid[idx] = data ? 1 : 0;
       f.ExRe[idx] = data ? data.ExRe : 0;
       f.ExIm[idx] = data ? data.ExIm : 0;
@@ -1174,7 +1226,7 @@ function draw() {
     drawingContext.rect(0, 0, width, height);
     drawingContext.clip();
     drawingContext.imageSmoothingEnabled = false;
-    image(fieldImage, 0, 0, f.cols * sLength, f.rows * sLength);
+    image(fieldImage, f.drawX, f.drawY, f.cols * f.cell, f.rows * f.cell);
     drawingContext.restore();
   }
 
@@ -1199,7 +1251,7 @@ function draw() {
           thickLine(
             [conScreenX(x), conScreenY(y)],
             [conScreenX(x_next), conScreenY(y_next)],
-            thickDipole,
+            thickDipole * zoom,
             [250, 250, 250]
           );
         }
@@ -1278,7 +1330,7 @@ function draw() {
           mousePressedFlag = false;
         }
 
-        thickLine([mouseX, mouseY], p1, thickDipole, [250, 250, 250]);
+        thickLine([mouseX, mouseY], p1, thickDipole * zoom, [250, 250, 250]);
 
         let lenAntenna = Math.sqrt(
           (mouseX - p1[0]) * (mouseX - p1[0]) +
@@ -1287,19 +1339,19 @@ function draw() {
 
         let tempX1 =
           0.5 * (mouseX + p1[0]) -
-          (0.5 * (p1[0] - mouseX) * defaultDipoleSep * Scale) / lenAntenna;
+          (0.5 * (p1[0] - mouseX) * defaultDipoleSep * Scale * zoom) / lenAntenna;
         let tempX2 =
           0.5 * (mouseX + p1[0]) +
-          (0.5 * (p1[0] - mouseX) * defaultDipoleSep * Scale) / lenAntenna;
+          (0.5 * (p1[0] - mouseX) * defaultDipoleSep * Scale * zoom) / lenAntenna;
 
         let tempY1 =
           0.5 * (mouseY + p1[1]) -
-          (0.5 * (p1[1] - mouseY) * defaultDipoleSep * Scale) / lenAntenna;
+          (0.5 * (p1[1] - mouseY) * defaultDipoleSep * Scale * zoom) / lenAntenna;
         let tempY2 =
           0.5 * (mouseY + p1[1]) +
-          (0.5 * (p1[1] - mouseY) * defaultDipoleSep * Scale) / lenAntenna;
+          (0.5 * (p1[1] - mouseY) * defaultDipoleSep * Scale * zoom) / lenAntenna;
 
-        thickLine([tempX1, tempY1], [tempX2, tempY2], thickDipole, [0, 0, 0]);
+        thickLine([tempX1, tempY1], [tempX2, tempY2], thickDipole * zoom, [0, 0, 0]);
       }
     }
   }
@@ -2023,7 +2075,7 @@ rect(
   
   // process changes
 
-  if (waitProcess) {
+  if (waitProcess && millis() >= zoomRebuildAfter) {
      
     
     if( !processingScheduled ){
@@ -2044,14 +2096,19 @@ rect(
   //after processing
 
   if (simulate) {
+    push();
+    drawingContext.beginPath();
+    drawingContext.rect(0, 0, width, height);
+    drawingContext.clip();
     updateFramePhase();
     refreshVisibleFields();
     const f = visibleFields;
     const ct = frameCos, st = frameSin;
-    for (let i = 0; i < f.cols; i += arrow_spacing) {
-      for (let j = 0; j < f.rows; j += arrow_spacing) {
-        const screenX = sLength * i;
-        const screenY = sLength * j;
+    for (let i = 0; i < f.cols; i += Math.max(1, Math.round(arrow_spacing / zoom))) {
+      for (let j = 0; j < f.rows; j += Math.max(1, Math.round(arrow_spacing / zoom))) {
+        const screenX = f.drawX + f.cell * i;
+        const screenY = f.drawY + f.cell * j;
+        if (screenX < 0 || screenY < 0 || screenX >= width || screenY >= height) continue;
         const idx = j * f.cols + i;
         if (!f.valid[idx]) continue;
         const Ex_t = f.ExRe[idx] * ct - f.ExIm[idx] * st;
@@ -2132,12 +2189,13 @@ rect(
           thickLine(
             [conScreenX(x), conScreenY(y)],
             [conScreenX(x_next), conScreenY(y_next)],
-            thickDipole,
+            thickDipole * zoom,
             [currentColorMag, currentColorMag, 0]
           );
         }
       }
     }
+    pop();
   }
 
   isMouseInStatBox = false;
@@ -2562,6 +2620,11 @@ rect(
 
   
   
+  push();
+  noStroke(); fill(0, 0, 0, 180); rect(8, 8, 275, 25);
+  fill(255); textSize(13); textAlign(LEFT, BASELINE);
+  text('Zoom ' + Math.round(zoom * 100) + '%  |  wheel: zoom  |  0: reset', 15, 25);
+  pop();
 }
 
 function mousePressed() {
