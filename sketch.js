@@ -1465,8 +1465,30 @@ function setup() {
   pixelDensity(1); frameRate(60);
   orig=[width/2+.1,height/2+.1];
   // Same default source construction as before, now centered in the workspace.
-  const a=componentTypes.dipole.create([conMyX(.05+width/2),conMyY(2*height/3)],[conMyX(width/2),conMyY(height/3)]);
-  antennas.push(a); selectedComponent=a;
+  const length = 3;       // Total length of each dipole
+  const amplitude = 10;  // Same current amplitude for both
+  const half = length / 2;
+  
+  // Horizontal dipole: phase 0°
+  const horizontal = componentTypes.dipole.create(
+    [-half, 0],
+    [ half, 0]
+  );
+  horizontal.setAmp(amplitude);
+  horizontal.setPhase(0);
+  
+  // Vertical dipole: phase +90°
+  // setPhase() takes radians.
+  const vertical = componentTypes.dipole.create(
+    [0, -half],
+    [0,  half]
+  );
+  vertical.setAmp(amplitude);
+  vertical.setPhase(Math.PI / 2);
+  
+  antennas.push(horizontal, vertical);
+  selectedComponent = horizontal;
+  
   bindCanvasEvents(); setTool('select'); renderInspector(); renderScene();
   time=millis()/timeScale;
 }
