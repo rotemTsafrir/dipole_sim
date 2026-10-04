@@ -1465,26 +1465,23 @@ function setup() {
   pixelDensity(1); frameRate(60);
   orig=[width/2+.1,height/2+.1];
   // Same default source construction as before, now centered in the workspace.
-  const length = 3;       // Total length of each dipole
-  const amplitude = 10;  // Same current amplitude for both
-  const half = length / 2;
-  
-  // Horizontal dipole: phase 0°
-  const horizontal = componentTypes.dipole.create(
-    [-half, 0],
-    [ half, 0]
+  const moment = 10; // Same current moment |Iℓ| for both
+
+  // Horizontal Hertzian dipole: orientation 0°, phase 0°
+  const horizontal = configureSource(
+    new HertzianDipole(c / freq, [0, 0], 0, moment, 0),
+    'hertzian',
+    'Hertzian'
   );
-  horizontal.setAmp(amplitude);
-  horizontal.setPhase(0);
   
-  // Vertical dipole: phase +90°
-  // setPhase() takes radians.
-  const vertical = componentTypes.dipole.create(
-    [0, -half],
-    [0,  half]
+  // Vertical Hertzian dipole: orientation 90°, phase +90°
+  const vertical = configureSource(
+    new HertzianDipole(
+      c / freq, [0, 0], Math.PI / 2, moment, Math.PI / 2
+    ),
+    'hertzian',
+    'Hertzian'
   );
-  vertical.setAmp(amplitude);
-  vertical.setPhase(Math.PI / 2);
   
   antennas.push(horizontal, vertical);
   selectedComponent = horizontal;
