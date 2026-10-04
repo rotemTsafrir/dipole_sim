@@ -1103,14 +1103,14 @@ const componentTypes = {
     firstHint:'Click the first endpoint', secondHint:'Click the second endpoint',
     validate:(a,b)=>length2D(a,b)>defaultDipoleSep+.01,
     invalidHint:'Choose a second endpoint farther than the feed gap',
-    create:(a,b)=>configureSource(new Dipole(c/freq,a,b,10*defAmp,0,thickDipole/Scale),'dipole','Dipole')
+    create:(a,b)=>configureSource(new Dipole(c/freq,a,b,defAmp,0,thickDipole/Scale),'dipole','Dipole')
   },
   hertzian: {
     name:'Hertzian dipole', description:'Position + direction · ideal current element',
     firstHint:'Click the source position', secondHint:'Click to set direction (symbol length is not physical)',
     validate:(a,b)=>length2D(a,b)>.001,
     invalidHint:'Choose a different point to set the direction',
-    create:(a,b)=>configureSource(new HertzianDipole(c/freq,a,Math.atan2(b[1]-a[1],b[0]-a[0]),1,0),'hertzian','Hertzian')
+    create:(a,b)=>configureSource(new HertzianDipole(c/freq,a,Math.atan2(b[1]-a[1],b[0]-a[0]),10,0),'hertzian','Hertzian')
   },
   smallLoop: {
     name:'Small loop', description:'Click a center · uniform circulating current', oneClick:true,
