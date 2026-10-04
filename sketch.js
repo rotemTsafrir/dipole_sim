@@ -1,17 +1,10 @@
-// Zoom update: wheel over the field; 0 resets magnification. Range 50%-400%.
 /*
- * EM simulator — CPU optimization, stage 2 (2026-10-02)
- * Replace your complete p5.js sketch.js with this file; keep your existing p5 setup.
- * Changes: primitive segment integration; real/imaginary phasors; double-precision
- * visible arrays; shared frame sine/cosine; one-pixel-per-cell rendering; avoid
- * redundant segment rebuilds; render the last row/column; restore 60 FPS target.
- * Stage 2: per-antenna unit-drive vector-potential grids, overlap reuse on pan,
- * numeric derivative stencils and immediate recombination on slider release.
- * Double-precision caches are bounded to the last viewport per antenna.
- * Original physical model, derivatives, softening and display transfer functions
- * are retained. The energy-flux heatmap is the original proxy, not calibrated |S|.
+ * EM Simulator — HTML controls and shared inspector (2026-10-04)
+ * Replace the existing sketch.js; keep the current p5.js script include.
+ * HTML and scoped CSS are created in setup(), so no other file is required.
+ * Select (V), Pan (H), Add (A), Escape to cancel, Delete selected, 0 reset zoom.
+ * Center-fed dipole only. Original current distribution and field solver retained.
  */
-
 // Converted Java abstract class to JavaScript class structure using p5.js-compatible syntax
 
 class Antenna {
@@ -25,9 +18,6 @@ class Antenna {
     this.currentSegments = [];
     this.segFlags = [];
 
-    this.showBox = false;
-    this.xBox = 0;
-    this.yBox = 0;
   }
 
   getWavelength() {
@@ -84,17 +74,7 @@ class Antenna {
     this.dl = dl;
   }
 
-  setShowBox(b) {
-    this.showBox = b;
-  }
 
-  getShowBox() {
-    return this.showBox;
-  }
-
-  toggleShowBox() {
-    this.showBox = !this.showBox;
-  }
 }
 
 ////
@@ -130,8 +110,6 @@ class Dipole extends Antenna {
     // thickness (in my scale) of dipole
     this.thickness = thick !== null ? thick : thickOrDl;
 
-    // horizontal and vertical distance (in my scale) of status box from antenna
-    this.delBoxAntenna = 0.1;
 
     // Add wire points
 
@@ -166,22 +144,6 @@ class Dipole extends Antenna {
     this.P4[0] = this.endPointA[0] - 0.5 * tempDel[0];
     this.P4[1] = this.endPointA[1] - 0.5 * tempDel[1];
 
-    let maxX = Math.max(this.P1[0], this.P2[0]);
-    let Y = this.P4[1];
-
-    maxX = Math.max(maxX, this.P3[0]);
-    maxX = Math.max(maxX, this.P4[0]);
-
-    if (maxX === this.P1[0]) {
-      Y = this.P1[1];
-    } else if (maxX === this.P2[0]) {
-      Y = this.P2[1];
-    } else if (maxX === this.P3[0]) {
-      Y = this.P3[1];
-    }
-
-    this.xBox = maxX + this.delBoxAntenna;
-    this.yBox = Y - this.delBoxAntenna;
   }
 
   getSep() {
@@ -257,18 +219,6 @@ class Dipole extends Antenna {
     this.setCurrentSegments();
   }
 
-  setXBox(newX) {
-    this.xBox = newX;
-  }
-
-  setYBox(newY) {
-    this.yBox = newY;
-  }
-
-  setDelBoxAntenna(del) {
-    this.delBoxAntenna = del;
-  }
-
   setAmp(newAmp) {
     this.amp = newAmp;
     this.I0 = ComplexNum.cis(this.phase).product(newAmp);
@@ -282,14 +232,6 @@ class Dipole extends Antenna {
   setWavelength(newWavelength) {
     this.wavelength = newWavelength;
     this.setCurrentSegments();
-  }
-
-  getXBox() {
-    return this.xBox;
-  }
-
-  getYBox() {
-    return this.yBox;
   }
 
   getLength() {
@@ -401,7 +343,7 @@ function gridView() {
 
 function setViewZoom(value, screenX, screenY) {
   const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
-  if (!Number.isFinite(next) || next === zoom || one_point) return;
+  if (!Number.isFinite(next) || next === zoom || placementStart) return;
   // Preserve the exact world coordinate beneath the cursor (without snapping).
   const ratio = next / zoom;
   orig[0] = screenX - (screenX - orig[0]) * ratio;
@@ -412,48 +354,11 @@ function setViewZoom(value, screenX, screenY) {
   zoomRebuildAfter = millis() + 100;
 }
 
-function mouseWheel(event) {
-  if (!inRect(0, 0, width, height, mouseX, mouseY)) return;
-  const overBox = antennas.some(a => a.getShowBox() && inRect(
-    conScreenX(a.getXBox()), conScreenY(a.getYBox()),
-    windowWidth * 400 / 1400, windowHeight * 370 / 1000, mouseX, mouseY));
-  if (overBox || one_point || mousePressedFlag) return false;
-  let delta = event.deltaY === undefined ? event.delta : event.deltaY;
-  if (event.deltaMode === 1) delta *= 16;
-  else if (event.deltaMode === 2) delta *= height;
-  if (Number.isFinite(delta)) setViewZoom(zoom * Math.exp(-Math.max(-500, Math.min(500, delta)) * 0.0015), mouseX, mouseY);
-  return false;
-}
-
-function keyPressed(event) {
-  if (key === '0' && !(event && (event.ctrlKey || event.metaKey || event.altKey))) {
-    setViewZoom(1, width / 2, height / 2);
-    return false;
-  }
-}
-
 let width = 1000;
 let height = 800;
 
-let prevWidth;
-let prevHeight;
-
 let N = Math.ceil(height / sLength);
 let M = Math.ceil(width / sLength);
-
-let extra_Width = 400;
-let extra_height = 200;
-
-let freq_button_offset = 0;
-let speed_button_offset = 0;
-
-let amp_button_offset = [];
-let phase_button_offset = [];
-let sep_button_offset = [];
-let flags_amp_button = [];
-let flags_phase_button = [];
-let flags_sep_button = [];
-let delButtonPressed = [];
 
 let orig = [500.1, 400.1];
 
@@ -498,13 +403,6 @@ let EM_phase_amp_map = new Map();
 
 let A_map = new Map();
 
-//mouse states
-let mouseRelease = false;
-let mousePressedFlag = false;
-
-//states
-let addNew_dipole_tx = false;
-let change_dipole_tx = false;
 let waitProcess = true;
 let simulate = false;
 let pause = false;
@@ -513,12 +411,6 @@ let pause = false;
 let show_BField = false;
 let show_EField = true;
 let show_EnergyFlux = false;
-
-let dipole_antenna_pressed = false;
-let one_point = false;
-
-let p1 = new Float32Array(2);
-let p2 = new Float32Array(2);
 
 const minFreq = 0.2;
 const maxFreq = 0.8;
@@ -539,23 +431,6 @@ const defAmp = 10;
 //
 const maxSep = 0.4;
 const defaultDipoleSep = 0.2;
-
-//frequency slider
-let freq_slider_on = false;
-let freq_slider_process = false;
-
-//speed of EM waves slider flags
-
-let speed_slider_on = false;
-let speed_slider_process = false;
-
-// amplitude slider flags
-let amp_slider_on = false;
-let amp_slider_process = false;
-
-// phase slider flags
-let phase_slider_on = false;
-let phase_slider_process = false;
 
 let arrow_spacing = 5;
 const maxArrowLen = 14;
@@ -578,16 +453,7 @@ tempB2 = new ComplexNum(0, 0);
 
 let zero = new ComplexNum(0, 0);
 
-let isMouseInStatBox = false;
-let processingScheduled = false
-
-let p1F = new Float32Array(2);
-let p2F = new Float32Array(2);
-let p3F = new Float32Array(2);
-let p4F = new Float32Array(2);
-
-let lastMouseX = 0;
-let lastMouseY = 0;
+let processingScheduled = false;
 
 let const_rFactor1 = (Scale * Scale) / (sLength * sLength);
 let const_rFactor2 = Scale / (2 * sLength);
@@ -623,50 +489,6 @@ function conScreenX(x) {
 
 function conScreenY(y) {
   return orig[1] - y * Scale * zoom;
-}
-
-function inRect(xRect, yRect, W, H, xPoint, yPoint) {
-  let ans = xRect <= xPoint && xPoint <= xRect + W;
-  ans = ans && yRect <= yPoint && yPoint <= yRect + H;
-  return ans;
-}
-
-// is mouse point inside a general rectangle. Order of vertices should be clockwise or counter clockwise
-function inRectGen(p1, p2, p3, p4, xMouse, yMouse) {
-  let ans = false;
-
-  //vectors that are two perpendicular sides of the rectangle
-
-  sideVec1 = [p2[0] - p1[0], p2[1] - p1[1]];
-  sideVec2 = [p3[0] - p2[0], p3[1] - p2[1]];
-
-  let len1 = Math.sqrt(sideVec1[0] * sideVec1[0] + sideVec1[1] * sideVec1[1]);
-  let len2 = Math.sqrt(sideVec2[0] * sideVec2[0] + sideVec2[1] * sideVec2[1]);
-
-  //normalise side vectors
-
-  sideVec1[0] /= len1;
-  sideVec1[1] /= len1;
-
-  sideVec2[0] /= len2;
-  sideVec2[1] /= len2;
-
-  let center = [
-    0.25 * (p1[0] + p2[0] + p3[0] + p4[0]),
-    0.25 * (p1[1] + p2[1] + p3[1] + p4[1]),
-  ];
-
-  let xTag = xMouse - center[0];
-  let yTag = yMouse - center[1];
-
-  //calculate projection of (xTag,yTag) vector on side vectors
-
-  let proj1 = sideVec1[0] * xTag + sideVec1[1] * yTag;
-  let proj2 = sideVec2[0] * xTag + sideVec2[1] * yTag;
-
-  ans = Math.abs(proj1) <= 0.5 * len1 && Math.abs(proj2) <= 0.5 * len2;
-
-  return ans;
 }
 
 function thickLine(p1, p2, thickness, c) {
@@ -940,161 +762,8 @@ function refreshVisibleFields(force = false) {
   visibleStep = sLength;
 }
 
-function setup() {
-  createCanvas(windowWidth, windowHeight);
-  prevWidth = windowWidth
-  prevHeight = windowHeight
-  
-  pixelDensity(1);
-  width = Math.round((1 / 1.4) * windowWidth);
-  height = Math.round((8 / 10) * windowHeight);
-
-  current = [];
-
-  one_point = false;
-
-  freq_button_offset =
-    ((freq - minFreq) / (maxFreq - minFreq)) *
-    ((200 - 30) / 1400) *
-    windowWidth;
-  speed_button_offset =
-    ((c - minSpeed) / (maxSpeed - minSpeed)) *
-    ((200 - 30) / 1400) *
-    windowWidth;
-
-  background(0);
-  frameRate(60);
-
-  let myP1 = [conMyX(0.05 + width / 2), conMyY((2 * height) / 3)];
-  let myP2 = [conMyX(width / 2), conMyY(height / 3)];
-
-  let amp = defAmp;
-  let phase = 0;
-
-  dipole = new Dipole(c / freq, myP1, myP2, amp, phase, thickDipole / Scale);
-
-  if (resolution == 1) {
-    dipole.setDl(dl_lr);
-  } else if (resolution == 2) {
-    dipole.setDl(dl_mr);
-  } else {
-    dipole.setDl(dl_hr);
-  }
-
-  antennas.push(dipole);
-
-  amp_button_offset.push((defAmp / maxAmp) * ((300 - 40) / 1400) * windowWidth);
-  phase_button_offset.push(0);
-  sep_button_offset.push(
-    (defaultDipoleSep * ((300 - 40) / 1400) * windowWidth) / maxSep
-  );
-
-  flags_amp_button.push(false);
-  flags_phase_button.push(false);
-  flags_sep_button.push(false);
-  delButtonPressed.push(false);
-  waitProcess = true;
-  simulate = false;
-}
-
-
-let flagA = true;
-let flagB = false;
-function draw() {
-  
-
-
-  
-  if(mousePressedFlag&&!isMouseInStatBox&& inRect(0, 0, width, height, mouseX, mouseY)
-){
-    
-  
-    
-  
-   if(flagA){
-    lastMouseX = mouseX
-    lastMouseY = mouseY
-    flagA = false
-   }
-    
-    if(mouseX!=lastMouseX||mouseY!=lastMouseY||one_point){
-    
-    flagB = true
-      
-    }   
-    
-   
-    orig[0] += mouseX-lastMouseX
-    orig[1] += mouseY-lastMouseY
-    
-   
-    
-    
-    lastMouseX = mouseX
-    lastMouseY = mouseY
-
-  }
-  
- else if(!mousePressedFlag){
-    
-     lastMouseX = mouseX
-    lastMouseY = mouseY
-   flagA = true
-    
-  }
-  
-  
-  
-   if(flagB && mouseRelease&&!one_point){
-    
-    
-    flagB = false 
-    flagA = true
-   simulate = false
-  waitProcess = true
-  processingScheduled = false
-    mouseRelease = false 
-    
-    
-        
- 
-  }
-  
-  
-  // All resolutions use the 60 FPS target; work per frame determines actual FPS.
-
-
-  if (windowWidth != prevWidth || windowHeight != prevHeight) {
-    freq_button_offset = (freq_button_offset * windowWidth) / prevWidth;
-    speed_button_offset = (speed_button_offset * windowWidth) / prevWidth;
-
-    for (let b = 0; b < antennas.length; b++) {
-      amp_button_offset[b] *= windowWidth / prevWidth;
-      phase_button_offset[b] *= windowWidth / prevWidth;
-      sep_button_offset[b] *= windowWidth / prevWidth;
-    }
-
-    // Repack the flat visible grid on both growth and shrinkage.
-    simulate = false;
-    waitProcess = true;
-    processingScheduled = false;
-
-    prevWidth = windowWidth;
-    prevHeight = windowHeight;
-
-    resizeCanvas(windowWidth, windowHeight);
-
-    width = Math.floor((1 / 1.4) * windowWidth);
-    height = Math.floor((8 / 10) * windowHeight);
-  }
-
-  background(0, 0, 0);
-
+function renderFields() {
   if (simulate) {
-    if (!pause) {
-      timeSim += millis() / timeScale - time;
-    }
-    time = millis() / timeScale;
 
     updateFramePhase();
     refreshVisibleFields();
@@ -1234,866 +903,7 @@ function draw() {
   
   
   
-  for (let b = 0; b < antennas.length && !simulate; b++) {
-    antenna = antennas[b];
-
-    if (antenna.getType() == "Dipole") {
-      segments = antennas[b].getSegments();
-
-      for (let j = 0; j < segments.length - 1; j++) {
-        let x = segments[j][0];
-        let x_next = segments[j + 1][0];
-
-        let y = segments[j][1];
-        let y_next = segments[j + 1][1];
-
-        if (antennas[b].getSegFlags()[j]) {
-          thickLine(
-            [conScreenX(x), conScreenY(y)],
-            [conScreenX(x_next), conScreenY(y_next)],
-            thickDipole * zoom,
-            [250, 250, 250]
-          );
-        }
-      }
-    }
-  }
-
-  if (addNew_dipole_tx) {
-    let is_mouse_pos_ok = inRect(0, 0, width, height, mouseX, mouseY);
-
-    if (is_mouse_pos_ok) {
-      if (!one_point && mousePressedFlag) {
-        p1[0] = mouseX;
-        p1[1] = mouseY;
-        
-
-        one_point = true;
-
-        mousePressedFlag = false;
-      }
-
-      if (one_point) {
-        if (mousePressedFlag) {
-          p2[0] = mouseX;
-          p2[1] = mouseY;
-
-          addNew_dipole_tx = false;
-          dipole_antenna_pressed = false;
-          one_point = false;
-
-          let myP1 = [conMyX(p1[0]), conMyY(p1[1])];
-          let myP2 = [conMyX(p2[0]), conMyY(p2[1])];
-
-          let amp = defAmp;
-          let phase = 0;
-          
-
-          dipole = new Dipole(
-            c / freq,
-            myP1,
-            myP2,
-            amp,
-            phase,
-            thickDipole / Scale
-          );
-
-          if (resolution == 1) {
-            dipole.setDl(dl_lr);
-          } else if (resolution == 2) {
-            dipole.setDl(dl_mr);
-          } else {
-            dipole.setDl(dl_hr);
-          }
-
-          antennas.push(dipole);
-
-          amp_button_offset.push(
-            (defAmp / maxAmp) * ((300 - 40) / 1400) * windowWidth
-          );
-          phase_button_offset.push(0);
-          sep_button_offset.push(
-            (defaultDipoleSep * ((300 - 40) / 1400) * windowWidth) / maxSep
-          );
-
-          flags_amp_button.push(false);
-          flags_phase_button.push(false);
-          flags_sep_button.push(false);
-          delButtonPressed.push(false);
-          
-          
-         
-          
-        A_map = new Map()
-        EM_phase_amp_map = new Map()
-
-          mousePressedFlag = false;
-        }
-
-        thickLine([mouseX, mouseY], p1, thickDipole * zoom, [250, 250, 250]);
-
-        let lenAntenna = Math.sqrt(
-          (mouseX - p1[0]) * (mouseX - p1[0]) +
-            (mouseY - p1[1]) * (mouseY - p1[1])
-        );
-
-        let tempX1 =
-          0.5 * (mouseX + p1[0]) -
-          (0.5 * (p1[0] - mouseX) * defaultDipoleSep * Scale * zoom) / lenAntenna;
-        let tempX2 =
-          0.5 * (mouseX + p1[0]) +
-          (0.5 * (p1[0] - mouseX) * defaultDipoleSep * Scale * zoom) / lenAntenna;
-
-        let tempY1 =
-          0.5 * (mouseY + p1[1]) -
-          (0.5 * (p1[1] - mouseY) * defaultDipoleSep * Scale * zoom) / lenAntenna;
-        let tempY2 =
-          0.5 * (mouseY + p1[1]) +
-          (0.5 * (p1[1] - mouseY) * defaultDipoleSep * Scale * zoom) / lenAntenna;
-
-        thickLine([tempX1, tempY1], [tempX2, tempY2], thickDipole * zoom, [0, 0, 0]);
-      }
-    }
-  }
-
-  //menu background
-
-  stroke(200, 200, 200);
-  fill(200, 200, 200);
-  rect(width, 0, windowWidth - width, height);
-  rect(0, height, windowWidth, height / 2);
-
-  //dipole antenna button
-
-  stroke(0, 0, 0);
-  fill(0, 0, 0);
-
-  fill(150, 150, 150);
-
-  if (dipole_antenna_pressed) {
-    fill(120, 120, 120);
-    stroke(250, 250, 250);
-  }
-
-  rect(
-    (35 / 1400) * windowWidth,
-    (860 / 1000) * windowHeight,
-    (175 / 1400) * windowWidth,
-    (70 / 1000) * windowHeight
-  );
-
-  fill(150, 150, 150);
-  stroke(0, 0, 0);
-
-  if (
-    !dipole_antenna_pressed &&
-    inRect(
-      (35 / 1400) * windowWidth,
-      (860 / 1000) * windowHeight,
-      (175 / 1400) * windowWidth,
-      (70 / 1000) * windowHeight,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    dipole_antenna_pressed = true;
-    mousePressedFlag = false;
-    
-   
-  } else if (
-    dipole_antenna_pressed &&
-    inRect(
-      (35 / 1400) * windowWidth,
-      (860 / 1000) * windowHeight,
-      (175 / 1400) * windowWidth,
-      (70 / 1000) * windowHeight,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    dipole_antenna_pressed = false;
-    mousePressedFlag = false;
-    addNew_dipole_tx = false;
-    one_point = false
-    
-    
-  }
-
-  if (dipole_antenna_pressed) {
-    addNew_dipole_tx = true;
-  }
-
-  stroke(0, 0, 0);
-  fill(0, 0, 0);
-
-  push();
-
-  scale(windowWidth / 1400, windowHeight / 1000);
-
-  textSize(23);
-  text("Dipole Antenna", 44, 902);
-
-  pop();
-
-  //pause button
-
-  stroke(0, 0, 0);
-
-  if (!pause) {
-    fill(240, 0, 0);
-  } else {
-    fill(0, 240, 0);
-  }
-
-  if (
-    inRect(
-      (920 / 1400) * windowWidth,
-      (860 / 1000) * windowHeight,
-      (80 / 1400) * windowWidth,
-      (80 / 1000) * windowHeight,
-      mouseX,
-      mouseY
-    )
-  ) {
-    if (!pause && mousePressedFlag&&!isMouseInStatBox) {
-      mousePressedFlag = false;
-      mouseRelease = false;
-      pause = true;
-    } else if (pause && mousePressedFlag&&!isMouseInStatBox) {
-      mousePressedFlag = false;
-      mouseRelease = false;
-      pause = false;
-    }
-  }
-
-  rect(
-    (920 / 1400) * windowWidth,
-    (860 / 1000) * windowHeight,
-    (80 / 1400) * windowWidth,
-    (80 / 1000) * windowHeight
-  );
-
-  if (!pause) {
-    fill(0, 0, 0);
-
-    push();
-
-    scale(windowWidth / 1400, windowHeight / 1000);
-    textSize(24);
-    text("Pause", 925, 852);
-    pop();
-  } else {
-    fill(0, 0, 0);
-
-    push();
-
-    scale(windowWidth / 1400, windowHeight / 1000);
-    textSize(24);
-    text("Resume", 915, 852);
-    pop();
-  }
-
-  
-  fill(150, 150, 150);
-
-  if (
-    inRect(
-      (1150 / 1400) * windowWidth,
-      (615 / 1000) * windowHeight,
-      (180 / 1400) * windowWidth,
-      (60 / 1000) * windowHeight,
-      mouseX,
-      mouseY
-    )&&!isMouseInStatBox
-  ) {
-    fill(120, 120, 120);
-
-    if (mousePressedFlag) {
-      antennas = [];
-      amp_button_offset = [];
-      phase_button_offset = [];
-      sep_button_offset = [];
-      flags_amp_button = [];
-      flags_phase_button = [];
-      sep_phase_button = [];
-      one_point = false;
-      simulate = false;
-      waitProcess = true
-      processingScheduled = false
-      A_map = new Map()
-      EM_phase_amp_map = new Map()
-    }
-  }
-
-  rect(
-    (1150 / 1400) * windowWidth,
-    (615 / 1000) * windowHeight,
-    (180 / 1400) * windowWidth,
-    (60 / 1000) * windowHeight
-  );
-
-  push();
-  fill(0, 0, 0);
-  scale(windowWidth / 1400, windowHeight / 1000);
-  textSize(26);
-  text("Clear All", 1190, 653);
-
-  textSize(20);
-
-  pop();
-
-  fill(150, 150, 150);
-
-  //resolution buttons logic
-
- 
-
-  let flagChangeRes = false;
- if(!isMouseInStatBox){
-  if (
-    resolution != 3 &&
-    inRect(
-      (1188 / 1400) * windowWidth,
-      (770 / 1000) * windowHeight,
-      (110 / 1400) * windowWidth,
-      (50 / 1000) * windowHeight,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    resolution = 3;
-    mousePressedFlag = false;
-    simulate = false;
-    waitProcess = true
-    
-     A_map = new Map()
-    EM_phase_amp_map = new Map()
-    flagChangeRes = true;
-    sLength = 2;
-    arrow_spacing = 10;
-  }
-
-  if (
-    resolution != 2 &&
-    inRect(
-      (1188 / 1400) * windowWidth,
-      (840 / 1000) * windowHeight,
-      (windowWidth * 110) / 1400,
-      (windowHeight * 50) / 1000,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    resolution = 2;
-    mousePressedFlag = false;
-    simulate = false;
-    waitProcess = true
-     A_map = new Map()
-    EM_phase_amp_map = new Map()
-    flagChangeRes = true;
-    sLength = 4;
-    arrow_spacing = 5;
-  }
-
-  if (
-    resolution != 1 &&
-    inRect(
-      (windowWidth * 1188) / 1400,
-      (windowHeight * 910) / 1000,
-      (windowWidth * 110) / 1400,
-      (windowHeight * 50) / 1000,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    resolution = 1;
-    mousePressedFlag = false;
-    simulate = false;
-    waitProcess = true
-     A_map = new Map()
-    EM_phase_amp_map = new Map()
-    flagChangeRes = true;
-    sLength = 5;
-    arrow_spacing = 4;
-  }
-
- }
-
-  if (flagChangeRes) {
-    N = Math.ceil(height / sLength);
-    M = Math.ceil(width / sLength);
-
-    const_rFactor1 = (Scale * Scale) / (sLength * sLength);
-    const_rFactor2 = Scale / (2 * sLength);
-  }
-
-  // resolution buttons graphics
-
-  if (resolution == 3) {
-    fill(120, 120, 120);
-    stroke(250, 250, 250);
-  }
-
-  rect(
-    (windowWidth * 1188) / 1400,
-    (windowHeight * 770) / 1000,
-    (windowWidth * 110) / 1400,
-    (windowHeight * 50) / 1000
-  );
-
-  stroke(0, 0, 0);
-  fill(150, 150, 150);
-
-  if (resolution == 2) {
-    fill(120, 120, 120);
-    stroke(250, 250, 250);
-  }
-
-  rect(
-    (windowWidth * 1188) / 1400,
-    (windowHeight * 840) / 1000,
-    (windowWidth * 110) / 1400,
-    (windowHeight * 50) / 1000
-  );
-
-  stroke(0, 0, 0);
-  fill(150, 150, 150);
-
-  if (resolution == 1) {
-    fill(120, 120, 120);
-    stroke(250, 250, 250);
-  }
-
-  rect(
-    (windowWidth * 1188) / 1400,
-    (windowHeight * 910) / 1000,
-    (windowWidth * 110) / 1400,
-    (windowHeight * 50) / 1000
-  );
-
-  stroke(0, 0, 0);
-  fill(150, 150, 150);
-
-  stroke(0, 0, 0);
-  fill(0, 0, 0);
-  textSize(25);
-  push();
-  scale(windowWidth / 1400, windowHeight / 1000);
-  text("Resolution:", 1185, 750);
-
-  text("high", 1220, 800);
-
-  text("medium", 1198, 870);
-
-  text("low", 1224, 942);
-  pop();
-  stroke(0, 0, 0);
-  fill(150, 150, 150);
-
-  //fields GUI
-
-  //E field button
-  if (show_EField) {
-    fill(120, 120, 120);
-    stroke(250, 250, 250);
-  }
-
-  rect(
-    (windowWidth * 1130) / 1400,
-    (windowHeight * 50) / 1000,
-    (windowWidth * 148) / 1400,
-    (windowHeight * 50) / 1000
-  );
-
-  push();
-  stroke(0, 0, 0);
-  fill(0, 0, 0);
-  textSize(20);
-  scale(windowWidth / 1400, windowHeight / 1000);
-  text("Show E Field", 1144, 80);
-
-  pop();
-
-  stroke(0, 0, 0);
-  fill(150, 150, 150);
-
-  if (
-    !show_EField &&
-    inRect(
-      (windowWidth * 1130) / 1400,
-      (windowHeight * 50) / 1000,
-      (windowWidth * 148) / 1400,
-      (windowHeight * 50) / 1000,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    show_EField = true;
-    show_BField = false;
-    show_EnergyFlux = false;
-
-    mousePressedFlag = false;
-  }
-
-  // B field button
-
-  if (show_BField) {
-    fill(120, 120, 120);
-    stroke(250, 250, 250);
-  }
-
-  rect(
-    (windowWidth * 1130) / 1400,
-    (windowHeight * 150) / 1000,
-    (windowWidth * 148) / 1400,
-    (windowHeight * 50) / 1000
-  );
-
-  stroke(0, 0, 0);
-  fill(0, 0, 0);
-  push();
-  textSize(20);
-  scale(windowWidth / 1400, windowHeight / 1000);
-  text("Show B Field", 1144, 180);
-  pop();
-  textSize(20);
-
-  fill(150, 150, 150);
-
-  if (
-    !show_BField &&
-    inRect(
-      (windowWidth * 1130) / 1400,
-      (windowHeight * 150) / 1000,
-      (windowWidth * 148) / 1400,
-      (windowHeight * 50) / 1000,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    show_EField = false;
-    show_BField = true;
-    show_EnergyFlux = false;
-
-    mousePressedFlag = false;
-  }
-
-  //energy flux button
-
-  if (show_EnergyFlux) {
-    fill(120, 120, 120);
-    stroke(250, 250, 250);
-  }
-
-  rect(
-    (windowWidth * 1130) / 1400,
-    (windowHeight * 250) / 1000,
-    (windowWidth * 190) / 1400,
-    (windowHeight * 50) / 1000
-  );
-
-  push();
-  stroke(0, 0, 0);
-  fill(0, 0, 0);
-  scale(windowWidth / 1400, windowHeight / 1000);
-  text("Show energy flux", 1144, 280);
-  pop();
-  textSize(20);
-
-  fill(150, 150, 150);
-
-  if (
-    !show_EnergyFlux &&
-    inRect(
-      (windowWidth * 1130) / 1400,
-      (windowHeight * 250) / 1000,
-      (windowWidth * 190) / 1400,
-      (windowHeight * 50) / 1000,
-      mouseX,
-      mouseY
-    ) &&
-    mousePressedFlag
-  ) {
-    show_EField = false;
-    show_BField = false;
-    show_EnergyFlux = true;
-
-    mousePressedFlag = false;
-  }
-
-  // frequency slider
-
-  stroke(0, 0, 0);
-  fill(0, 0, 0);
-
-  push();
-  scale(windowWidth / 1400, windowHeight / 1000);
-  text("Frequency", 1180, 340);
-  pop();
-  textSize(20);
-
-  fill(250, 250, 250);
-
-  rect(
-    (windowWidth * 1130) / 1400,
-    (windowHeight * 350) / 1000,
-    (windowWidth * 200) / 1400,
-    (windowHeight * 30) / 1000
-  );
-
-  //frequency slider button
-
-  fill(110, 110, 110);
-
-  if (
-    mousePressedFlag &&
-    inRect(
-      (windowWidth * 1130) / 1400 + freq_button_offset,
-      (windowHeight * 350) / 1000,
-      (windowWidth * 30) / 1400,
-      (windowHeight * 30) / 1000,
-      mouseX,
-      mouseY
-    )
-  ) {
-    freq_slider_on = true;
-  } else if (
-    !mousePressedFlag ||
-    !inRect(
-      (windowWidth * 1130) / 1400,
-      (windowHeight * 350) / 1000,
-      (windowWidth * 200) / 1400,
-      (windowHeight * 30) / 1000,
-      mouseX,
-      mouseY
-    )
-  ) {
-    if(freq_slider_on){
-      
-      simulate = false;
-    waitProcess = true
-     A_map = new Map()
-    EM_phase_amp_map = new Map()
-      
-       freq =
-      minFreq +
-      (freq_button_offset / ((windowWidth * (200 - 30)) / 1400)) *
-        (maxFreq - minFreq);
-
-    freq_slider_process = false;
-
-    for (let i = 0; i < antennas.length; i++) {
-      antennas[i].setWavelength(c / freq);
-    }
-      
-    }
-    freq_slider_on = false;
-  }
-
-  if (freq_slider_on) {
-    freq_slider_process = true;
-    
-
-    fill(90, 90, 90);
-
-    freq_button_offset = mouseX - (windowWidth * (1130 + 15)) / 1400;
-    if (freq_button_offset < 0) {
-      freq_button_offset = 0;
-    } else if (
-      freq_button_offset + (windowWidth * 30) / 1400 >
-      (windowWidth * 200) / 1400
-    ) {
-      freq_button_offset = ((200 - 30) * windowWidth) / 1400;
-    }
-  }
-
-  rect(
-    (windowWidth * 1130) / 1400 + freq_button_offset,
-    (windowHeight * 350) / 1000,
-    (windowWidth * 30) / 1400,
-    (windowHeight * 30) / 1000
-  );
-
- 
-stroke(0, 0, 0);
-fill(0, 0, 0);
-push();
-scale(windowWidth / 1400, windowHeight / 1000);
-text("Speed", 1200, 420);
-pop();
-textSize(20);
-
-// Slider bar background
-stroke(0, 0, 0);
-fill(250, 250, 250);
-rect(
-  (windowWidth * 1130) / 1400,
-  (windowHeight * 430) / 1000,
-  (windowWidth * 200) / 1400,
-  (windowHeight * 30) / 1000
-);
-  
-  fill(110,110,110)
-
-// --- Handle slider button logic ---
-
-// 1. Check if mouse is pressed on the slider button → Activate slider
-if (
-  mousePressedFlag &&
-  inRect(
-    (windowWidth * 1130) / 1400 + speed_button_offset,
-    (windowHeight * 430) / 1000,
-    (windowWidth * 30) / 1400,
-    (windowHeight * 30) / 1000,
-    mouseX,
-    mouseY
-  )
-) {
-  speed_slider_on = true;
-}
-
-// 2. If mouse is released OR moved out of slider bar → finalize speed update
-else if (
-  !mousePressedFlag ||
-  !inRect(
-    (windowWidth * 1130) / 1400,
-    (windowHeight * 430) / 1000,
-    (windowWidth * 200) / 1400,
-    (windowHeight * 30) / 1000,
-    mouseX,
-    mouseY
-  )
-) {
-  if (speed_slider_on) {
-    // Stop simulation and reset maps for recalculation
-    simulate = false;
-    waitProcess = true;
-    A_map = new Map();
-    EM_phase_amp_map = new Map();
-
-    // Update speed based on button position
-    c =
-      minSpeed +
-      (speed_button_offset / ((windowWidth * (200 - 30)) / 1400)) *
-      (maxSpeed - minSpeed);
-
-    speed_slider_process = false;
-
-    // Update wavelength for all antennas
-    for (let i = 0; i < antennas.length; i++) {
-      antennas[i].setWavelength(c / freq);
-    }
-  }
-  speed_slider_on = false;
-}
-
-// 3. If slider is active → update button offset as mouse drags
-if (speed_slider_on) {
-  speed_slider_process = true;
-  fill(90, 90, 90);
-
-  speed_button_offset = mouseX - (windowWidth * (1130 + 15)) / 1400;
-
-  if (speed_button_offset < 0) {
-    speed_button_offset = 0;
-  } else if (
-    speed_button_offset + (windowWidth * 30) / 1400 >
-    (windowWidth * 200) / 1400
-  ) {
-    speed_button_offset = ((200 - 30) * windowWidth) / 1400;
-  }
-}
-
-// Draw the slider button
-rect(
-  (windowWidth * 1130) / 1400 + speed_button_offset,
-  (windowHeight * 430) / 1000,
-  (windowWidth * 30) / 1400,
-  (windowHeight * 30) / 1000
-);
-  
-  
-   //simulation status button
-
-  if (simulate) {
-    fill(0, 250, 0);
-
-
-    rect(
-      (1150 / 1400) * windowWidth,
-      (515 / 1000) * windowHeight,
-      (180 / 1400) * windowWidth,
-      (60 / 1000) * windowHeight
-    );
-
-    fill(0, 0, 0);
-    push();
-
-    scale(windowWidth / 1400, windowHeight / 1000);
-
-    textSize(28);
-    text("Simulating", 1170, 553);
-
-    pop();
-  }
-  
-  else{
-    
-    
-     fill(220, 0, 0);
-
- 
-    rect(
-      (1150 / 1400) * windowWidth,
-      (515 / 1000) * windowHeight,
-      (180 / 1400) * windowWidth,
-      (60 / 1000) * windowHeight
-    );
-
-    fill(0, 0, 0);
-
-    push();
-
-    scale(windowWidth / 1400, windowHeight / 1000);
-
-    textSize(28);
-    text("Loading", 1185, 553);
-
-    pop();
-    
-
-    
-  }
-  
-  
-  // process changes
-
-  if (waitProcess && millis() >= zoomRebuildAfter) {
-     
-    
-    if( !processingScheduled ){
-   
-     processingScheduled = true  
-    }
-    
-    else{
-      
-       startProcessingNewSetup()
-    }
-    
-    
-  }
-
-
-  
-  //after processing
+  // Original field vectors and animated wire currents.
 
   if (simulate) {
     push();
@@ -2198,459 +1008,398 @@ rect(
     pop();
   }
 
-  isMouseInStatBox = false;
+}
+// UI-only upgrade: no new antenna models or changes to field integration.
+// Self-contained drop-in sketch: native HTML/CSS are mounted by setup().
+let selectedComponent = null;
+let activeTool = 'select';
+let placementType = null;
+let placementStart = null;
+let pointerGesture = null;
+let hoverPoint = null;
+let componentSerial = 0;
+let ui = {};
 
-  for (let b = 0; b < antennas.length; b++) {
-    antenna = antennas[b];
-
-    let xBox = conScreenX(antenna.getXBox());
-    let yBox = conScreenY(antenna.getYBox());
-    if (
-      antenna.getShowBox() &&
-      inRect(
-        xBox,
-        yBox,
-        (windowWidth * 400) / 1400,
-        (windowHeight * 370) / 1000,
-        mouseX,
-        mouseY
-      )
-    ) {
-      isMouseInStatBox = true;
+// The palette owns placement; the solver continues to receive the same Dipoles.
+const componentTypes = {
+  dipole: {
+    name: 'Center-fed dipole',
+    description: 'Two endpoints · sinusoidal current',
+    create(a, b) {
+      const source = new Dipole(c / freq, a, b, defAmp, 0, thickDipole / Scale);
+      source.setDl(resolution === 1 ? dl_lr : resolution === 2 ? dl_mr : dl_hr);
+      source.componentType = 'dipole';
+      source.label = `Dipole ${++componentSerial}`;
+      return source;
     }
   }
+};
 
-  for (let b = 0; b < antennas.length; b++) {
-    antenna = antennas[b];
+const interfaceCSS = `
+html,body {margin:0!important;padding:0!important;width:100%;height:100%;overflow:hidden;background:#090d13;}
+#em-app {--panel:#121923;--line:#283340;--muted:#93a3b6;--accent:#77e2c3;position:fixed;inset:0;z-index:10;display:grid;grid-template-rows:auto minmax(0,1fr) auto;color:#e6edf5;background:#090d13;font:13px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;}
+#em-app * {box-sizing:border-box;}
+#em-app [hidden] {display:none!important;}
+#em-app button,#em-app input,#em-app select {font:inherit;}
+#em-app button,#em-app select,#em-app input[type=number] {color:inherit;background:#1a2431;border:1px solid #344252;border-radius:7px;min-height:34px;padding:6px 10px;}
+#em-app button {cursor:pointer;white-space:nowrap;}
+#em-app button:hover {background:#293849;border-color:#62798f;}
+#em-app button[aria-pressed=true],#em-app .primary {color:#0b2520;background:var(--accent);border-color:var(--accent);}
+#em-app button:focus-visible,#em-app input:focus-visible,#em-app select:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
+#em-app button:disabled {opacity:.4;cursor:default;}
+#em-app .topbar {display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);}
+#em-app .brand {display:flex;align-items:center;gap:10px;margin-right:auto;min-width:170px;}
+#em-app .brand-mark {color:var(--accent);font-size:27px;line-height:1;}
+#em-app .brand strong {display:block;font-size:16px;letter-spacing:-.3px;}
+#em-app .brand small {display:block;color:var(--muted);font-size:10px;letter-spacing:1.6px;text-transform:uppercase;}
+#em-app .top-control {display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;}
+#em-app .top-control input {width:76px;}
+#em-app .body {display:grid;grid-template-columns:66px minmax(0,1fr) 280px;min-height:0;}
+#em-app .tools {display:flex;flex-direction:column;align-items:stretch;gap:9px;padding:14px 7px;background:var(--panel);border-right:1px solid var(--line);}
+#em-app .tool {display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px;font-size:10px;}
+#em-app .tool svg {width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+#em-app .divider {height:1px;background:var(--line);margin:5px 0;}
+#em-app .workspace {position:relative;min-width:0;min-height:0;overflow:hidden;background:#000;}
+#em-app .workspace canvas {display:block;touch-action:none;outline:none;}
+#em-app .workspace canvas:focus-visible {outline:1px solid var(--accent);outline-offset:-2px;}
+#em-app .canvas-tag {position:absolute;left:18px;top:15px;pointer-events:none;color:#c4d2dc;font-size:10px;text-transform:uppercase;letter-spacing:1.4px;background:#091019c9;padding:5px 8px;border-radius:4px;}
+#em-app .hint {position:absolute;bottom:16px;left:50%;transform:translateX(-50%);max-width:90%;padding:8px 13px;border:1px solid #334354;border-radius:8px;background:#111b27e8;color:#c2d0de;font-size:12px;text-align:center;pointer-events:none;}
+#em-app .palette {position:absolute;top:14px;left:14px;width:min(280px,calc(100% - 28px));z-index:2;background:#151e2a;border:1px solid #405368;border-radius:11px;padding:14px;box-shadow:0 12px 40px #0008;}
+#em-app .eyebrow {text-transform:uppercase;letter-spacing:1.5px;font-size:10px;font-weight:650;color:var(--muted);margin:0 0 12px;}
+#em-app .palette button {width:100%;text-align:left;padding:12px;white-space:normal;}
+#em-app .palette small {display:block;color:var(--muted);margin-top:4px;}
+#em-app .inspector {min-height:0;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:20px 18px;}
+#em-app h2 {font-size:18px;margin:0 0 4px;letter-spacing:-.4px;}
+#em-app .muted {color:var(--muted);font-size:12px;}
+#em-app .section {padding-top:18px;margin-top:18px;border-top:1px solid var(--line);}
+#em-app .property {display:block;margin:0 0 16px;}
+#em-app .property-head {display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+#em-app .property-head input {width:90px;text-align:right;font-variant-numeric:tabular-nums;}
+#em-app input[type=range] {display:block;width:100%;margin:0;accent-color:var(--accent);cursor:pointer;}
+#em-app .readout {display:flex;justify-content:space-between;color:var(--muted);margin:8px 0;font-size:12px;}
+#em-app .readout output {color:#e6edf5;font-variant-numeric:tabular-nums;}
+#em-app .danger {color:#ffaba7;background:transparent;border-color:#654046;width:100%;}
+#em-app .scene-list {display:grid;gap:6px;margin-top:10px;}
+#em-app .scene-list button {text-align:left;font-size:12px;overflow:hidden;text-overflow:ellipsis;}
+#em-app .footer {display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;padding:8px 16px;color:var(--muted);background:var(--panel);border-top:1px solid var(--line);font-size:11px;}
+#em-app .footer .status {margin-right:auto;}
+#em-app .status-dot {display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:7px;}
+#em-app .zoom-controls {display:flex;gap:5px;align-items:center;}
+#em-app .zoom-controls button {min-height:26px;padding:2px 8px;font-size:11px;}
+#em-app .empty {padding:18px 0;line-height:1.7;color:var(--muted);}
+@media(max-width:1000px) {#em-app .topbar {gap:8px;padding:9px 12px;}#em-app .body {grid-template-columns:58px minmax(0,1fr) 240px;}#em-app .brand {min-width:145px;}#em-app .brand strong{font-size:14px;}#em-app .top-control{font-size:11px;}}
+@media(max-width:680px) {#em-app .body{grid-template-columns:52px minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(120px,34%);}#em-app .tools{grid-row:1 / 3;padding:10px 4px;}#em-app .inspector{grid-column:2;grid-row:2;border-left:0;border-top:1px solid var(--line);padding:14px;}#em-app .topbar{gap:7px;}#em-app .brand{min-width:135px;}#em-app .brand small{display:none;}#em-app .top-control input{width:65px;}#em-app .top-control select{max-width:125px;}#em-app .footer{padding:6px 10px;gap:6px 10px;}#em-app .hint{font-size:11px;bottom:9px;}#em-app .property{margin-bottom:12px;}}
+`;
 
-    let xBox = conScreenX(antenna.getXBox());
-    let yBox = conScreenY(antenna.getYBox());
-
-    if (antenna.getType() == "Dipole") {
-      p1F[0] = conScreenX(antenna.getP1()[0]);
-      p1F[1] = conScreenY(antenna.getP1()[1]);
-
-      p2F[0] = conScreenX(antenna.getP2()[0]);
-      p2F[1] = conScreenY(antenna.getP2()[1]);
-
-      p3F[0] = conScreenX(antenna.getP3()[0]);
-      p3F[1] = conScreenY(antenna.getP3()[1]);
-
-      p4F[0] = conScreenX(antenna.getP4()[0]);
-      p4F[1] = conScreenY(antenna.getP4()[1]);
-
-      stroke(200, 0, 0);
-      fill(200, 0, 0);
-
-      if (antenna.getShowBox()) {
-        stroke(250, 250, 250);
-        fill(140, 140, 140);
-
-        rect(
-          xBox,
-          yBox,
-          (windowWidth * 400) / 1400,
-          (windowHeight * 370) / 1000
-        );
-
-        stroke(0, 0, 0);
-        fill(250, 250, 250);
-
-        //amplitude slide
-
-        rect(
-          xBox + (windowWidth * 50) / 1400,
-          yBox + (windowHeight * 55) / 1000,
-          (windowWidth * 300) / 1400,
-          (windowHeight * 30) / 1000
-        );
-
-        stroke(0, 0, 0);
-        fill(0, 0, 0);
-        push();
-        scale(windowWidth / 1400, windowHeight / 1000);
-        textSize(25);
-        text(
-          "Amplitude",
-          (xBox * 1400) / windowWidth + 145,
-          (yBox * 1000) / windowHeight + 48
-        );
-        pop();
-        stroke(0, 0, 0);
-        fill(110, 110, 110);
-
-        //amplitude slide button
-
-        if (
-          inRect(
-            xBox + (windowWidth * 50) / 1400 + amp_button_offset[b],
-            yBox + (windowHeight * 55) / 1000,
-            (windowWidth * 40) / 1400,
-            (windowHeight * 30) / 1000,
-            mouseX,
-            mouseY
-          ) &&
-          mousePressedFlag
-        ) {
-          flags_amp_button[b] = true;
-        }
-
-        else if (
-          !mousePressedFlag ||
-          !inRect(
-            xBox + (windowWidth * 50) / 1400,
-            yBox + (windowHeight * 55) / 1000,
-            (windowWidth * 300) / 1400,
-            (windowHeight * 30) / 1000,
-            mouseX,
-            mouseY
-          )
-        ) {
-          
-          
-          if(flags_amp_button[b]){
-          flags_amp_button[b] = false;
-           amp_slider_process = true;
-          simulate = false;
-           waitProcess = true
-          processingScheduled = false
-           A_map = new Map()
-          EM_phase_amp_map = new Map()
-            
-           antenna.setAmp(
-            (maxAmp * amp_button_offset[b]) /
-              ((windowWidth * (300 - 40)) / 1400)
-          );
-          startProcessingNewSetup();
-
-            
-          }
-        }
-
-        if (flags_amp_button[b]) {
-         
-         
-          fill(90, 90, 90);
-
-          amp_button_offset[b] =
-            mouseX - xBox - (windowWidth * (50 + 20)) / 1400;
-          if (amp_button_offset[b] < 0) {
-            amp_button_offset[b] = 0;
-          } else if (
-            amp_button_offset[b] + (windowWidth * 40) / 1400 >
-            (windowWidth * 300) / 1400
-          ) {
-            amp_button_offset[b] = ((300 - 40) * windowWidth) / 1400;
-          }
-        }
-
-        rect(
-          xBox + (windowWidth * 50) / 1400 + amp_button_offset[b],
-          yBox + (windowHeight * 55) / 1000,
-          (windowWidth * 40) / 1400,
-          (windowHeight * 30) / 1000
-        );
-
-        stroke(0, 0, 0);
-        fill(250, 250, 250);
-        
-        
-
-        //phase slide
-        rect(
-          xBox + (windowWidth * 50) / 1400,
-          yBox + (windowHeight * 155) / 1000,
-          (windowWidth * 300) / 1400,
-          (windowHeight * 30) / 1000
-        );
-
-        stroke(0, 0, 0);
-        fill(0, 0, 0);
-        push();
-        scale(windowWidth / 1400, windowHeight / 1000);
-        textSize(25);
-        text(
-          "Phase",
-          (1400 * xBox) / windowWidth + 170,
-          (yBox * 1000) / windowHeight + 148
-        );
-
-        text(
-          "0",
-          (1400 * xBox) / windowWidth + 22,
-          (yBox * 1000) / windowHeight + 178
-        );
-        text(
-          "2π",
-          (1400 * xBox) / windowWidth + 357,
-          (yBox * 1000) / windowHeight + 178
-        );
-        pop();
-
-        fill(110, 110, 110);
-
-        if (
-          inRect(
-            xBox + (windowWidth * 50) / 1400 + phase_button_offset[b],
-            yBox + (155 * windowHeight) / 1000,
-            (windowWidth * 40) / 1400,
-            (windowHeight * 30) / 1000,
-            mouseX,
-            mouseY
-          ) &&
-          mousePressedFlag
-        ) {
-          flags_phase_button[b] = true;
-        }
-
-        if (
-          !mousePressedFlag ||
-          !inRect(
-            xBox + (windowWidth * 50) / 1400,
-            yBox + (windowHeight * 155) / 1000,
-            (windowWidth * 300) / 1400,
-            (windowHeight * 30) / 1000,
-            mouseX,
-            mouseY
-          )
-        ) {
-          
-          if(flags_phase_button[b]){
-          
-          flags_phase_button[b] = false;
-          phase_slider_process = true;
-          simulate = false;
-           waitProcess = true
-          processingScheduled = false
-           A_map = new Map()
-          EM_phase_amp_map = new Map()
-          antenna.setPhase(
-            2 *
-              Math.PI *
-              (1 / 12) *
-              Math.round(
-                (12 * phase_button_offset[b]) /
-                  ((windowWidth * (300 - 40)) / 1400)
-              )
-          );
-          startProcessingNewSetup();  
-            
-          }
-        }
-
-        if (flags_phase_button[b]) {
-          
-
-          fill(90, 90, 90);
-
-          phase_button_offset[b] =
-            mouseX - xBox - (windowWidth * (50 + 20)) / 1400;
-          if (phase_button_offset[b] < 0) {
-            phase_button_offset[b] = 0;
-          } else if (
-            phase_button_offset[b] + (windowWidth * 40) / 1400 >
-            (windowWidth * 300) / 1400
-          ) {
-            phase_button_offset[b] = (windowWidth * (300 - 40)) / 1400;
-          }
-        }
-
-        rect(
-          xBox + (windowWidth * 50) / 1400 + phase_button_offset[b],
-          yBox + (windowHeight * 155) / 1000,
-          (windowWidth * 40) / 1400,
-          (windowHeight * 30) / 1000
-        );
-
-        stroke(0, 0, 0);
-        fill(250, 250, 250);
-
-        // seperation slide
-
-        rect(
-          xBox + (windowWidth * 50) / 1400,
-          yBox + (windowHeight * 255) / 1000,
-          (windowWidth * 300) / 1400,
-          (windowHeight * 30) / 1000
-        );
-
-        push();
-        stroke(0, 0, 0);
-        fill(0, 0, 0);
-        scale(windowWidth / 1400, windowHeight / 1000);
-        textSize(25);
-        text(
-          "Seperation",
-          (1400 * xBox) / windowWidth + 150,
-          (1000 * yBox) / windowHeight + 248
-        );
-        pop();
-
-        fill(110, 110, 110);
-
-        if (
-          inRect(
-            xBox + (windowWidth * 50) / 1400 + sep_button_offset[b],
-            yBox + (windowHeight * 255) / 1000,
-            (windowWidth * 40) / 1400,
-            (windowHeight * 30) / 1000,
-            mouseX,
-            mouseY
-          ) &&
-          mousePressedFlag
-        ) {
-          flags_sep_button[b] = true;
-        }
-
-        if (
-          !mousePressedFlag ||
-          !inRect(
-            xBox + (windowWidth * 50) / 1400,
-            yBox + (windowHeight * 255) / 1000,
-            (windowWidth * 300) / 1400,
-            (windowHeight * 30) / 1000,
-            mouseX,
-            mouseY
-          )
-        ) {
-          
-          if(flags_sep_button[b]){
-          
-          phase_slider_process = true;
-          simulate = false;
-           waitProcess = true
-          processingScheduled = false
-          A_map = new Map()
-          EM_phase_amp_map = new Map()
-          antenna.setSep(
-            (maxSep * sep_button_offset[b]) /
-              ((windowWidth * (300 - 40)) / 1400)
-          );  
-          flags_sep_button[b] = false;
-            
-          }
-        }
-
-        if (flags_sep_button[b]) {
-          
-
-          fill(90, 90, 90);
-
-          sep_button_offset[b] =
-            mouseX - xBox - (windowWidth * (50 + 20)) / 1400;
-          if (sep_button_offset[b] < 0) {
-            sep_button_offset[b] = 0;
-          } else if (
-            sep_button_offset[b] + (windowWidth * 40) / 1400 >
-            (windowWidth * 300) / 1400
-          ) {
-            sep_button_offset[b] = (windowWidth * (300 - 40)) / 1400;
-          }
-        }
-
-        rect(
-          xBox + (windowWidth * 50) / 1400 + sep_button_offset[b],
-          yBox + (windowHeight * 255) / 1000,
-          (windowWidth * 40) / 1400,
-          (windowHeight * 30) / 1000
-        );
-
-        //delete antenna button
-
-        fill(240, 0, 0);
-
-        if (
-          inRect(
-            xBox + (windowWidth * 128) / 1400,
-            yBox + (windowHeight * 308) / 1000,
-            (windowWidth * 150) / 1400,
-            (windowHeight * 40) / 1000,
-            mouseX,
-            mouseY
-          ) &&
-          mousePressedFlag
-        ) {
-          amp_button_offset.splice(b, 1);
-          phase_button_offset.splice(b, 1);
-          sep_button_offset.splice(b, 1);
-          flags_amp_button.splice(b, 1);
-          flags_phase_button.splice(b, 1);
-          flags_sep_button.splice(b, 1);
-          delButtonPressed.splice(b, 1);
-          antennas.splice(b, 1);
-          mousePressedFlag = false;
-          simulate = false;
-           waitProcess = true
-           A_map = new Map()
-          EM_phase_amp_map = new Map()
-        }
-
-        rect(
-          xBox + (windowWidth * 128) / 1400,
-          yBox + (windowHeight * 308) / 1000,
-          (windowWidth * 150) / 1400,
-          (windowHeight * 40) / 1000
-        );
-
-        stroke(0, 0, 0);
-        fill(0, 0, 0);
-        push();
-        scale(windowWidth / 1400, windowHeight / 1000);
-        textSize(26);
-        text(
-          "delete",
-          (xBox * 1400) / windowWidth + 170,
-          (yBox * 1000) / windowHeight + 335
-        );
-        pop();
-      }
-
-      if (
-        inRectGen(p1F, p2F, p3F, p4F, mouseX, mouseY) &&
-        mousePressedFlag &&
-        !isMouseInStatBox
-      ) {
-        mousePressedFlag = false;
-
-        antenna.toggleShowBox();
-      }
-    }
+function icon(paths) { return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`; }
+function mountInterface() {
+  const style = document.createElement('style');
+  style.textContent = interfaceCSS;
+  document.head.appendChild(style);
+  const root = document.createElement('main');
+  root.id = 'em-app';
+  root.innerHTML = `
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">∿</span><div><strong>EM Simulator</strong><small>Electromagnetic workspace</small></div></div>
+      <button id="em-play" title="Pause / resume (Space)">Ⅱ Pause</button>
+      <label class="top-control">Field <select id="em-field"><option value="E">Electric field</option><option value="B">Magnetic field</option><option value="S">Energy flux proxy</option></select></label>
+      <label class="top-control">Frequency <input id="em-frequency" type="number" min="${minFreq}" max="${maxFreq}" step="0.01" value="${freq}" title="Simulation frequency"></label>
+      <label class="top-control">Wave speed <input id="em-speed" type="number" min="${minSpeed}" max="${maxSpeed}" step="0.1" value="${c}" title="Simulation wave speed"></label>
+      <label class="top-control">Quality <select id="em-quality"><option value="1">Low</option><option value="2" selected>Medium</option><option value="3">High</option></select></label>
+    </header>
+    <div class="body">
+      <nav class="tools" aria-label="Workspace tools">
+        <button class="tool" id="em-select" title="Select component (V)" aria-pressed="true">${icon('<path d="M5 3l14 9-7 1-3 7z"/>')}Select</button>
+        <button class="tool" id="em-pan" title="Pan (H); middle-drag also pans" aria-pressed="false">${icon('<path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>')}Pan</button>
+        <div class="divider"></div>
+        <button class="tool" id="em-add" title="Add component (A)" aria-expanded="false" aria-controls="em-palette">${icon('<path d="M12 5v14M5 12h14"/>')}Add</button>
+      </nav>
+      <section class="workspace" id="em-workspace" aria-label="Simulation workspace">
+        <div class="canvas-tag" id="em-field-tag">Electric field · XY plane</div>
+        <div class="palette" id="em-palette" hidden><p class="eyebrow">Add component · Antennas</p><div id="em-palette-items"></div></div>
+        <div class="hint" id="em-hint"></div>
+      </section>
+      <aside class="inspector" aria-label="Component properties">
+        <p class="eyebrow">Properties</p>
+        <div id="em-properties"></div>
+        <div class="section"><p class="eyebrow">Scene <span id="em-count"></span></p><div class="scene-list" id="em-scene"></div></div>
+        <div class="section"><button class="danger" id="em-clear">Clear scene</button></div>
+        <div class="section muted">Wheel to zoom · 0 to reset<br>V select · H pan · A add<br>Esc cancel · Delete selected<br><br>Values use the original simulation units.</div>
+      </aside>
+    </div>
+    <footer class="footer"><span class="status" role="status" id="em-status"></span><span id="em-grid"></span><span id="em-wavelength"></span><div class="zoom-controls"><button id="em-zoom-out" aria-label="Zoom out">−</button><button id="em-zoom-reset" title="Reset zoom (0)">100%</button><button id="em-zoom-in" aria-label="Zoom in">+</button></div></footer>`;
+  document.body.appendChild(root);
+  ui.root = root;
+  const find = id => root.querySelector(`#em-${id}`);
+  for (const id of ['workspace','properties','scene','palette','hint','status','count','grid','wavelength']) ui[id] = find(id);
+  ui.play = find('play');
+  ui.select = find('select'); ui.pan = find('pan'); ui.add = find('add');
+  ui.select.onclick = () => setTool('select');
+  ui.pan.onclick = () => setTool('pan');
+  ui.add.onclick = togglePalette;
+  for (const [type, descriptor] of Object.entries(componentTypes)) {
+    const button = document.createElement('button');
+    button.innerHTML = `<strong>${descriptor.name}</strong><small>${descriptor.description}</small>`;
+    button.onclick = () => { placementType = type; setTool('add'); ui.canvas.focus(); };
+    find('palette-items').appendChild(button);
   }
-  
+  ui.play.onclick = togglePause;
+  find('field').onchange = e => {
+    show_EField = e.target.value === 'E'; show_BField = e.target.value === 'B'; show_EnergyFlux = e.target.value === 'S';
+    find('field-tag').textContent = e.target.selectedOptions[0].textContent + ' · XY plane';
+  };
+  function bindNumber(id, read, write) {
+    const el = find(id);
+    el.onchange = () => {
+      const value = el.valueAsNumber;
+      if (!Number.isFinite(value)) { el.value = read(); return; }
+      const next = Math.max(+el.min, Math.min(+el.max, value));
+      write(next); el.value = read();
+      for (const a of antennas) a.setWavelength(c / freq);
+      renderInspector(); requestFieldUpdate();
+    };
+  }
+  bindNumber('frequency', () => freq, v => { freq = v; });
+  bindNumber('speed', () => c, v => { c = v; });
+  find('quality').onchange = e => {
+    resolution = +e.target.value;
+    sLength = resolution === 3 ? 2 : resolution === 2 ? 4 : 5;
+    arrow_spacing = resolution === 3 ? 10 : resolution === 2 ? 5 : 4;
+    requestFieldUpdate();
+  };
+  find('clear').onclick = () => {
+    antennas = []; selectedComponent = null; setTool('select');
+    renderInspector(); renderScene(); requestFieldUpdate();
+  };
+  find('zoom-out').onclick = () => setViewZoom(zoom / 1.25, width / 2, height / 2);
+  find('zoom-in').onclick = () => setViewZoom(zoom * 1.25, width / 2, height / 2);
+  find('zoom-reset').onclick = () => setViewZoom(1, width / 2, height / 2);
+  document.addEventListener('keydown', handleKeyboard);
+  root.addEventListener('pointerdown', e => {
+    if (!ui.palette.hidden && !ui.palette.contains(e.target) && !ui.add.contains(e.target)) closePalette();
+  });
+}
 
-  
-  
+function requestFieldUpdate(delay = 0) {
+  simulate = false;
+  waitProcess = true;
+  processingScheduled = false;
+  zoomRebuildAfter = millis() + delay;
+}
+function closePalette() { ui.palette.hidden = true; ui.add.setAttribute('aria-expanded','false'); }
+function togglePalette() {
+  const open = ui.palette.hidden;
+  setTool('select');
+  ui.palette.hidden = !open;
+  ui.add.setAttribute('aria-expanded', String(open));
+  if (open) ui.palette.querySelector('button').focus();
+}
+function setTool(tool) {
+  activeTool = tool; placementStart = null;
+  closePalette();
+  ui.select.setAttribute('aria-pressed',String(tool === 'select'));
+  ui.pan.setAttribute('aria-pressed',String(tool === 'pan'));
+  ui.add.setAttribute('aria-pressed',String(tool === 'add'));
+  if (ui.canvas) ui.canvas.style.cursor = tool === 'pan' ? 'grab' : tool === 'add' ? 'crosshair' : 'default';
+  updateHint();
+}
+function updateHint(message) {
+  ui.hint.textContent = message || (activeTool === 'add' ? (placementStart ? 'Click the second endpoint · Esc to cancel' : 'Click the first endpoint · Esc to cancel') : activeTool === 'pan' ? 'Drag to pan · Wheel to zoom' : 'Select a wire to edit its properties · Add to place a dipole');
+}
+function selectComponent(component) {
+  selectedComponent = component;
+  renderInspector(); renderScene();
+}
+function renderScene() {
+  ui.scene.replaceChildren();
+  ui.count.textContent = `(${antennas.length})`;
+  ui.root.querySelector('#em-clear').disabled = !antennas.length;
+  for (const a of antennas) {
+    const b = document.createElement('button');
+    b.textContent = a.label;
+    b.setAttribute('aria-pressed',String(a === selectedComponent));
+    b.onclick = () => { setTool('select'); selectComponent(a); };
+    ui.scene.appendChild(b);
+  }
+  if (!antennas.length) ui.scene.innerHTML = '<span class="muted">No components. Choose Add to begin.</span>';
+}
+function renderInspector() {
+  const a = selectedComponent;
+  ui.properties.replaceChildren();
+  if (!a) { ui.properties.innerHTML = '<h2>No selection</h2><div class="empty">Select a component in the workspace or the scene list to edit its properties.</div>'; return; }
+  const title = document.createElement('h2'); title.textContent = a.label;
+  ui.properties.appendChild(title);
+  const subtitle = document.createElement('div'); subtitle.className = 'muted'; subtitle.textContent = componentTypes[a.componentType].name;
+  ui.properties.appendChild(subtitle);
+  const section = document.createElement('div'); section.className = 'section'; ui.properties.appendChild(section);
+  // A shared inspector consumes property descriptors; no per-source floating boxes.
+  const properties = [
+    {key:'amp', label:'Current amplitude', min:0, max:maxAmp, step:0.1, get:()=>a.getAmp(), set:v=>a.setAmp(v)},
+    {key:'phase', label:'Phase (°)', min:0, max:360, step:1, get:()=>a.getPhase()*180/Math.PI, set:v=>a.setPhase(v*Math.PI/180)},
+    {key:'gap', label:'Feed gap', min:0, max:Math.min(maxSep, Math.max(0,a.getLength()-0.01)), step:0.01, get:()=>a.getSep(), set:v=>a.setSep(v)}
+  ];
+  for (const property of properties) {
+    const row = document.createElement('div'); row.className = 'property';
+    row.innerHTML = `<div class="property-head"><label for="em-prop-${property.key}">${property.label}</label><input id="em-prop-${property.key}" type="number" min="${property.min}" max="${property.max}" step="${property.step}"></div><input type="range" min="${property.min}" max="${property.max}" step="${property.step}" aria-label="${property.label} slider">`;
+    const [number, range] = row.querySelectorAll('input');
+    number.value = range.value = Number(property.get().toFixed(4));
+    range.oninput = () => { number.value = range.value; };
+    const commit = input => {
+      if (selectedComponent !== a || !antennas.includes(a)) return;
+      let value = input.valueAsNumber;
+      if (!Number.isFinite(value)) { number.value = range.value = Number(property.get().toFixed(4)); return; }
+      value = Math.max(property.min, Math.min(property.max,value));
+      property.set(value); number.value = range.value = Number(value.toFixed(4));
+      requestFieldUpdate();
+    };
+    number.onchange = () => commit(number); range.onchange = () => commit(range);
+    section.appendChild(row);
+  }
+  const readout = document.createElement('div');
+  readout.innerHTML = `<div class="readout"><span>Length</span><output>${a.getLength().toFixed(3)}</output></div><div class="readout"><span>Electrical length · L/λ</span><output>${(a.getLength()*freq/c).toFixed(3)}</output></div>`;
+  section.appendChild(readout);
+  const del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete component';
+  del.onclick = deleteSelected; section.appendChild(del);
+}
+function deleteSelected() {
+  if (!selectedComponent) return;
+  antennas = antennas.filter(a => a !== selectedComponent);
+  selectComponent(null); requestFieldUpdate();
+}
+function togglePause() { pause = !pause; time = millis()/timeScale; ui.play.textContent = pause ? '▶ Resume' : 'Ⅱ Pause'; }
+function handleKeyboard(e) {
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
+  switch (e.key.toLowerCase()) {
+    case 'escape': setTool('select'); break;
+    case 'v': setTool('select'); break;
+    case 'h': setTool('pan'); break;
+    case 'a': togglePalette(); break;
+    case '0': setViewZoom(1,width/2,height/2); break;
+    case 'delete': case 'backspace': deleteSelected(); break;
+    case ' ': if (e.target.tagName === 'BUTTON') return; togglePause(); break;
+    default: return;
+  }
+  e.preventDefault();
+}
+function pointerLocation(e) {
+  const rect = ui.canvas.getBoundingClientRect();
+  return [(e.clientX-rect.left)*width/rect.width,(e.clientY-rect.top)*height/rect.height];
+}
+function hitComponent(point) {
+  for (let i=antennas.length-1;i>=0;i--) {
+    const a=antennas[i], p=[conScreenX(a.endPointA[0]),conScreenY(a.endPointA[1])], q=[conScreenX(a.endPointB[0]),conScreenY(a.endPointB[1])];
+    const dx=q[0]-p[0], dy=q[1]-p[1], d=dx*dx+dy*dy;
+    const t=d ? Math.max(0,Math.min(1,((point[0]-p[0])*dx+(point[1]-p[1])*dy)/d)) : 0;
+    if (Math.hypot(point[0]-p[0]-t*dx,point[1]-p[1]-t*dy)<=Math.max(9,thickDipole*zoom/2+4)) return a;
+  }
+  return null;
+}
+function bindCanvasEvents() {
+  const canvas=ui.canvas;
+  canvas.tabIndex=0; canvas.setAttribute('aria-label','Electromagnetic field. Use Add, then click two endpoints to place a dipole.');
+  canvas.addEventListener('pointerdown',e=>{
+    if (pointerGesture || (e.button!==0 && e.button!==1)) return;
+    e.preventDefault(); canvas.focus(); closePalette();
+    const point=pointerLocation(e);
+    pointerGesture={id:e.pointerId, start:point, last:point, pan:activeTool==='pan'||e.button===1, moved:false};
+    canvas.setPointerCapture(e.pointerId);
+    if (pointerGesture.pan) canvas.style.cursor='grabbing';
+  });
+  canvas.addEventListener('pointermove',e=>{
+    const point=pointerLocation(e); hoverPoint=point;
+    if (!pointerGesture || pointerGesture.id!==e.pointerId) return;
+    const g=pointerGesture;
+    if (Math.hypot(point[0]-g.start[0],point[1]-g.start[1])>4) g.moved=true;
+    if (g.pan) { orig[0]+=point[0]-g.last[0]; orig[1]+=point[1]-g.last[1]; waitProcess=true; processingScheduled=false; }
+    g.last=point;
+  });
+  canvas.addEventListener('pointerup',e=>{
+    if (!pointerGesture || pointerGesture.id!==e.pointerId) return;
+    const g=pointerGesture, point=pointerLocation(e); pointerGesture=null;
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    canvas.style.cursor=activeTool==='pan'?'grab':activeTool==='add'?'crosshair':'default';
+    if (g.pan) { requestFieldUpdate(); return; }
+    if (g.moved || point[0]<0 || point[0]>width || point[1]<0 || point[1]>height) return;
+    if (activeTool==='add') {
+      const world=[conMyX(point[0]),conMyY(point[1])];
+      if (!placementStart) { placementStart=world; updateHint(); return; }
+      if (length2D(placementStart,world)<=defaultDipoleSep+0.01) { updateHint('Choose a second endpoint farther than the feed gap'); return; }
+      const a=componentTypes[placementType].create(placementStart,world);
+      antennas.push(a); setTool('select'); selectComponent(a); requestFieldUpdate();
+    } else selectComponent(hitComponent(point));
+  });
+  const cancel=e=>{
+    if (!pointerGesture || pointerGesture.id!==e.pointerId) return;
+    const wasPan=pointerGesture.pan; pointerGesture=null;
+    canvas.style.cursor=activeTool==='pan'?'grab':activeTool==='add'?'crosshair':'default';
+    if (wasPan) requestFieldUpdate();
+  };
+  canvas.addEventListener('pointercancel',cancel); canvas.addEventListener('lostpointercapture',cancel);
+  canvas.addEventListener('pointerleave',()=>{ if (!pointerGesture) hoverPoint=null; });
+  canvas.addEventListener('wheel',e=>{
+    e.preventDefault(); if (pointerGesture || placementStart) return;
+    const point=pointerLocation(e);
+    const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?height:1);
+    setViewZoom(zoom*Math.exp(-Math.max(-500,Math.min(500,delta))*.0015),...point);
+  },{passive:false});
+  canvas.addEventListener('contextmenu',e=>e.preventDefault());
+}
+
+function setup() {
+  mountInterface();
+  width=Math.max(1,ui.workspace.clientWidth); height=Math.max(1,ui.workspace.clientHeight);
+  const canvas=createCanvas(width,height); canvas.parent(ui.workspace); ui.canvas=canvas.elt;
+  pixelDensity(1); frameRate(60);
+  orig=[width/2+.1,height/2+.1];
+  // Same default source construction as before, now centered in the workspace.
+  const a=componentTypes.dipole.create([conMyX(.05+width/2),conMyY(2*height/3)],[conMyX(width/2),conMyY(height/3)]);
+  antennas.push(a); selectedComponent=a;
+  bindCanvasEvents(); setTool('select'); renderInspector(); renderScene();
+  time=millis()/timeScale;
+}
+function draw() {
+  const w=Math.max(1,ui.workspace.clientWidth), h=Math.max(1,ui.workspace.clientHeight);
+  if (w!==width || h!==height) {
+    orig[0]+=(w-width)/2; orig[1]+=(h-height)/2;
+    resizeCanvas(w,h); width=w; height=h; requestFieldUpdate(80);
+  }
+  const now=millis()/timeScale;
+  if (!pause && simulate) timeSim+=now-time;
+  time=now;
+  background(0);
+  renderFields();
+  drawComponentOverlay();
+  updateStatus();
+  // Allow a painted "Updating" state before the synchronous, unchanged solver.
+  if (waitProcess && !pointerGesture && millis()>=zoomRebuildAfter) {
+    if (!processingScheduled) processingScheduled=true;
+    else startProcessingNewSetup();
+  }
+}
+function drawComponentOverlay() {
   push();
-  noStroke(); fill(0, 0, 0, 180); rect(8, 8, 275, 25);
-  fill(255); textSize(13); textAlign(LEFT, BASELINE);
-  text('Zoom ' + Math.round(zoom * 100) + '%  |  wheel: zoom  |  0: reset', 15, 25);
+  if (!simulate) for (const a of antennas) {
+    const segments=a.getSegments();
+    for(let j=0;j<segments.length-1;j++) if(a.getSegFlags()[j]) thickLine([conScreenX(segments[j][0]),conScreenY(segments[j][1])],[conScreenX(segments[j+1][0]),conScreenY(segments[j+1][1])],thickDipole*zoom,[200,213,226]);
+  }
+  if (selectedComponent) {
+    stroke(119,226,195); strokeWeight(1.5); noFill();
+    for (const p of [selectedComponent.endPointA,selectedComponent.endPointB]) circle(conScreenX(p[0]),conScreenY(p[1]),thickDipole*zoom+9);
+  }
+  if(activeTool==='add' && placementStart && hoverPoint) {
+    stroke(119,226,195); strokeWeight(2);
+    drawingContext.setLineDash([6,5]);
+    line(conScreenX(placementStart[0]),conScreenY(placementStart[1]),conScreenX(conMyX(hoverPoint[0])),conScreenY(conMyY(hoverPoint[1])));
+    drawingContext.setLineDash([]);
+    noFill(); circle(conScreenX(placementStart[0]),conScreenY(placementStart[1]),10);
+  }
   pop();
 }
-
-function mousePressed() {
-  mouseRelease = false;
-  mousePressedFlag = true;
+function updateStatus() {
+  const state=waitProcess?'Updating fields…':pause?'Paused':'Running';
+  const status=`${state} · ${antennas.length} ${antennas.length===1?'source':'sources'}`;
+  if(ui.status.dataset.text!==status) { ui.status.innerHTML='<span class="status-dot"></span>'+status; ui.status.dataset.text=status; }
+  ui.grid.textContent=`Grid ${(sLength/Scale).toFixed(2)}`;
+  ui.wavelength.textContent=`λ ${(c/freq).toFixed(2)}`;
+  ui.root.querySelector('#em-zoom-reset').textContent=`${Math.round(zoom*100)}%`;
 }
-
-function mouseReleased() {
-  mouseRelease = true;
-  mousePressedFlag = false;
-}
-
-
-
-// Mobile
-function touchStarted() {
-  mousePressedFlag = true;
-  mouseRelease = false;
-  return false; // prevent default scroll
-}
-
-function touchEnded() {
-  mousePressedFlag = false;
-  mouseRelease = true;
-  return false;
-}
-
-
-
