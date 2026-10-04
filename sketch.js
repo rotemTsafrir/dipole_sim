@@ -1572,8 +1572,26 @@ function setup() {
   pixelDensity(1); frameRate(60);
   orig=[width/2+.1,height/2+.1];
   // Same default source construction as before, now centered in the workspace.
-  const a=componentTypes.dipole.create([conMyX(.05+width/2),conMyY(2*height/3)],[conMyX(width/2),conMyY(height/3)]);
-  antennas.push(a); selectedComponent=a;
+  const moment = 1; // Same current moment |Iℓ| for both
+
+  // Horizontal Hertzian dipole: orientation 0°, phase 0°
+  const horizontal = configureSource(
+    new HertzianDipole(c / freq, [0, 0], 0, moment, 0),
+    'hertzian',
+    'Hertzian'
+  );
+  
+  // Vertical Hertzian dipole: orientation 90°, phase +90°
+  const vertical = configureSource(
+    new HertzianDipole(
+      c / freq, [0, 0], Math.PI / 2, moment, Math.PI / 2
+    ),
+    'hertzian',
+    'Hertzian'
+  );
+  
+  antennas.push(horizontal, vertical);
+  selectedComponent = horizontal;
   bindCanvasEvents(); setTool('select'); renderInspector(); renderScene();
   time=millis()/timeScale;
 }
