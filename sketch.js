@@ -1,6 +1,4 @@
 
-// Converted Java abstract class to JavaScript class structure using p5.js-compatible syntax
-
 class Antenna {
   constructor(wavelength, amp, phase, dl = 0.12) {
     this.wavelength = wavelength;
@@ -10,6 +8,7 @@ class Antenna {
     this.dl = dl;
     this.segments = [];
     this.currentSegments = [];
+    this.segmentLengths = new Float64Array(0);
     this.segFlags = [];
 
   }
@@ -41,6 +40,26 @@ class Antenna {
   getCurrentSegments() {
     return this.currentSegments;
   }
+
+  // Stable, normalized source data. Every rebuild replaces these arrays so that
+  // geometry/current-profile edits invalidate the basis cache. Drive edits do not.
+  // currentSegments[n] = Float64Array([JxRe, JyRe, JxIm, JyIm]).
+  // segmentLengths is the integration weight; for a point current moment it is 1.
+  getCurrentElements() {
+    return {positions: this.segments, currents: this.currentSegments, lengths: this.segmentLengths};
+  }
+
+  getProperties() {
+    return [
+      {key:'amp', label:'Current amplitude', min:0, max:maxAmp, step:0.1, get:()=>this.amp, set:v=>this.setAmp(v)},
+      {key:'phase', label:'Phase (°)', min:0, max:360, step:1, get:()=>this.phase*180/Math.PI, set:v=>this.setPhase(v*Math.PI/180)}
+    ];
+  }
+  getReadouts() { return []; }
+  getNotes() { return []; }
+  getDisplayEdges() { return []; }
+  getHitEdges() { return this.getDisplayEdges(); }
+  getSelectionPoints() { return []; }
 
   getSegFlags() {
     return this.segFlags;
@@ -180,7 +199,7 @@ class Dipole extends Antenna {
 
         this.segments.push([p[0], p[1]]);
 
-        let Ivec = [0, 0];
+        let Ivec = new Float64Array(4);
         let z = l + this.dl / 2 - sideLen / 2;
 
         if (Math.abs(z) > this.sep / 2) {
@@ -200,6 +219,7 @@ class Dipole extends Antenna {
         l = Math.round(10000 * l) / 10000.0;
       }
     }
+    this.segmentLengths = new Float64Array(this.segments.length).fill(this.dl);
   }
 
   setSep(newSep) {
@@ -236,6 +256,19 @@ class Dipole extends Antenna {
     return "Dipole";
   }
 
+  getProperties() {
+    return [...super.getProperties(),
+      {key:'gap', label:'Feed gap', min:0, max:Math.min(maxSep,Math.max(0,this.length-.01)), step:.01, get:()=>this.sep, set:v=>this.setSep(v)}];
+  }
+  getReadouts() { return [['Length',this.length.toFixed(3)],['Electrical length · L/λ',(this.length/this.wavelength).toFixed(3)]]; }
+  getDisplayEdges() {
+    const edges=[];
+    for(let j=0;j<this.segments.length-1;j++) if(this.segFlags[j]) edges.push({a:screenPoint(this.segments[j]),b:screenPoint(this.segments[j+1]),current:j,width:thickDipole*zoom});
+    return edges;
+  }
+  getHitEdges() { return [{a:screenPoint(this.endPointA),b:screenPoint(this.endPointB),width:thickDipole*zoom}]; }
+  getSelectionPoints() { return [screenPoint(this.endPointA),screenPoint(this.endPointB)]; }
+
   getP1() {
     return this.P1;
   }
@@ -254,6 +287,90 @@ class Dipole extends Antenna {
 }
 
 //
+
+// Point current element: amp means |I*l|, not current through the display glyph.
+// Weight 1 keeps this moment independent of wire discretization and zoom.
+class HertzianDipole extends Antenna {
+  constructor(wavelength,position,angle=0,moment=1,phase=0) {
+    super(wavelength,moment,phase);
+    this.position=[...position]; this.angle=angle;
+    this.setCurrentSegments();
+  }
+  setCurrentSegments() {
+    this.segments=[[...this.position]];
+    this.currentSegments=[new Float64Array([Math.cos(this.angle),Math.sin(this.angle),0,0])];
+    this.segmentLengths=new Float64Array([1]); this.segFlags=[true];
+  }
+  setAngle(angle) { this.angle=angle; this.setCurrentSegments(); }
+  getProperties() {
+    const props=super.getProperties(); props[0].label='Current moment |Iℓ|'; props[0].step=.01;
+    return [...props,{key:'angle',label:'Orientation (°)',min:0,max:360,step:1,
+      get:()=>((this.angle*180/Math.PI)%360+360)%360,set:v=>this.setAngle(v*Math.PI/180)}];
+  }
+  getReadouts() { return [['Source','Point current element'],['Orientation','From +x, counterclockwise']]; }
+  getNotes() { return [{text:'The arrow is a fixed-size symbol, not a physical wire. Strength is set by Iℓ. Fields use the existing 0.1-unit source smoothing.'}]; }
+  getDisplayEdges() {
+    const p=screenPoint(this.position),dx=Math.cos(this.angle),dy=-Math.sin(this.angle);
+    const start=[p[0]-18*dx,p[1]-18*dy],end=[p[0]+18*dx,p[1]+18*dy];
+    return [
+      {a:start,b:end,current:0,width:4},
+      {a:end,b:[end[0]-8*dx+5*dy,end[1]-8*dy-5*dx],current:0,width:3},
+      {a:end,b:[end[0]-8*dx-5*dy,end[1]-8*dy+5*dx],current:0,width:3}];
+  }
+  getSelectionPoints() { return [screenPoint(this.position)]; }
+}
+
+// Closed circular wire in the XY plane. Midpoint quadrature uses exact arc
+// weights R*dphi, no duplicate endpoint and no feed gap. Positive current is CCW.
+// At least 64 samples are used even when the entire loop is smaller than dl.
+class SmallLoop extends Antenna {
+  constructor(wavelength,center,radius,amp=10,phase=0) {
+    super(wavelength,amp,phase);
+    this.center=[...center]; this.radius=radius;
+    this.setCurrentSegments();
+  }
+  setCurrentSegments() {
+    const circumference=2*Math.PI*this.radius;
+    const count=Math.max(64,Math.ceil(circumference/this.dl));
+    const dphi=2*Math.PI/count;
+    this.segments=[]; this.currentSegments=[]; this.segFlags=[];
+    this.segmentLengths=new Float64Array(count).fill(circumference/count);
+    for(let n=0;n<count;n++) {
+      const phi=(n+.5)*dphi;
+      this.segments.push([this.center[0]+this.radius*Math.cos(phi),this.center[1]+this.radius*Math.sin(phi)]);
+      this.currentSegments.push(new Float64Array([-Math.sin(phi),Math.cos(phi),0,0]));
+      this.segFlags.push(true);
+    }
+  }
+  setRadius(radius) { if(!Number.isFinite(radius)||radius<=0) return; this.radius=radius; this.setCurrentSegments(); }
+  setDl(dl) { if(this.dl===dl) return; this.dl=dl; this.setCurrentSegments(); }
+  getProperties() {
+    return [...super.getProperties(),{key:'radius',label:'Loop radius',min:.001,max:2,step:.001,get:()=>this.radius,set:v=>this.setRadius(v)}];
+  }
+  getReadouts() {
+    const circumference=2*Math.PI*this.radius;
+    return [['Circumference',circumference.toFixed(4)],['Electrical size · C/λ',(circumference/this.wavelength).toFixed(4)],['Magnetic moment |I·area|',(this.amp*Math.PI*this.radius*this.radius).toPrecision(4)],['Current profile','Uniform · positive CCW']];
+  }
+  getNotes() {
+    const notes=[{text:'Loop lies in the XY plane (normal +z). Current is prescribed uniformly around the closed wire; there is no feed gap.'}];
+    if(2*Math.PI*this.radius/this.wavelength>.1+1e-12) notes.push({warning:true,text:'C/λ exceeds 0.1. The uniform current is still prescribed, but is outside the small-loop approximation; no real feed response is being solved.'});
+    if(this.radius*Scale*zoom<14) notes.push({text:'The ring symbol is enlarged for visibility. Only the radius value sets the field geometry.'});
+    if(this.radius<Math.max(.1,sLength/Scale)) notes.push({text:'This loop is smaller than the smoothing/grid scale. Its near-source field is approximate; inspect the field away from the ring.'});
+    return notes;
+  }
+  getDisplayEdges() {
+    const p=screenPoint(this.center),r=Math.max(14,this.radius*Scale*zoom),edges=[];
+    for(let n=0;n<64;n++) {
+      const a=n*2*Math.PI/64,b=(n+1)*2*Math.PI/64;
+      edges.push({a:[p[0]+r*Math.cos(a),p[1]-r*Math.sin(a)],b:[p[0]+r*Math.cos(b),p[1]-r*Math.sin(b)],current:Math.min(this.currentSegments.length-1,Math.floor(n*this.currentSegments.length/64)),width:3});
+    }
+    return edges;
+  }
+  getSelectionPoints() {
+    const p=screenPoint(this.center),r=Math.max(14,this.radius*Scale*zoom);
+    return [[p[0]+r,p[1]],[p[0]-r,p[1]]];
+  }
+}
 
 // Converted ComplexNum class from Java to JavaScript
 
@@ -532,9 +649,7 @@ function calcA(myX, myY) {
   let axRe = 0, axIm = 0, ayRe = 0, ayIm = 0;
   for (let i = 0; i < antennas.length; i++) {
     const antenna = antennas[i];
-    const segments = antenna.getSegments();
-    const currents = antenna.getCurrentSegments();
-    const dl = antenna.getDl();
+    const {positions: segments, currents, lengths} = antenna.getCurrentElements();
     const drive = antenna.getI0();
     const driveRe = drive.a, driveIm = drive.b;
     for (let j = 0; j < segments.length; j++) {
@@ -544,10 +659,10 @@ function calcA(myX, myY) {
       const invR = 1 / distance;
       const gRe = Math.cos(-k * distance) * invR;
       const gIm = Math.sin(-k * distance) * invR;
-      const jx = currents[j][0] * dl;
-      const jy = currents[j][1] * dl;
-      const jxRe = jx * driveRe, jxIm = jx * driveIm;
-      const jyRe = jy * driveRe, jyIm = jy * driveIm;
+      const jx = currents[j][0] * lengths[j], jy = currents[j][1] * lengths[j];
+      const ix = currents[j][2] * lengths[j], iy = currents[j][3] * lengths[j];
+      const jxRe = jx * driveRe - ix * driveIm, jxIm = jx * driveIm + ix * driveRe;
+      const jyRe = jy * driveRe - iy * driveIm, jyIm = jy * driveIm + iy * driveRe;
       axRe += jxRe * gRe - jxIm * gIm;
       axIm += jxRe * gIm + jxIm * gRe;
       ayRe += jyRe * gRe - jyIm * gIm;
@@ -567,9 +682,10 @@ let lastProcessingStats = null;
 
 function unitPotentialGrid(antenna, cols, rows, x0, y0, stats) {
   const old = antennaBasisCache.get(antenna);
+  const {positions: segments, currents, lengths} = antenna.getCurrentElements();
   const step = sLength / Scale;
-  const reusable = old && old.segments === antenna.segments &&
-    old.currents === antenna.currentSegments && old.dl === antenna.dl &&
+  const reusable = old && old.segments === segments &&
+    old.currents === currents && old.lengths === lengths &&
     old.k === k && old.step === step;
   if (reusable && old.cols === cols && old.rows === rows && old.x0 === x0 && old.y0 === y0) {
     stats.reusedSamples += cols * rows;
@@ -577,10 +693,9 @@ function unitPotentialGrid(antenna, cols, rows, x0, y0, stats) {
   }
   const size = cols * rows;
   const grid = { cols, rows, x0, y0, step, k, dl: antenna.dl,
-    segments: antenna.segments, currents: antenna.currentSegments,
+    segments, currents, lengths,
     axRe: new Float64Array(size), axIm: new Float64Array(size),
     ayRe: new Float64Array(size), ayIm: new Float64Array(size) };
-  const segments = antenna.segments, currents = antenna.currentSegments;
   for (let j = 0; j < rows; j++) {
     const gy = y0 - j;
     const oldRow = reusable ? old.y0 - gy : -1;
@@ -601,9 +716,10 @@ function unitPotentialGrid(antenna, cols, rows, x0, y0, stats) {
         const distance = Math.sqrt(dx * dx + dy * dy) + 0.1;
         const gr = Math.cos(-k * distance) / distance;
         const gi = Math.sin(-k * distance) / distance;
-        const jx = currents[n][0] * antenna.dl, jy = currents[n][1] * antenna.dl;
-        xr += jx * gr; xi += jx * gi;
-        yr += jy * gr; yi += jy * gi;
+        const jx = currents[n][0] * lengths[n], jy = currents[n][1] * lengths[n];
+        const ix = currents[n][2] * lengths[n], iy = currents[n][3] * lengths[n];
+        xr += jx * gr - ix * gi; xi += jx * gi + ix * gr;
+        yr += jy * gr - iy * gi; yi += jy * gi + iy * gr;
       }
       grid.axRe[idx] = xr; grid.axIm[idx] = xi;
       grid.ayRe[idx] = yr; grid.ayIm[idx] = yi;
@@ -628,7 +744,7 @@ function startProcessingNewSetup() {
 
   // Detect changes independently of UI invalidation, including deletion/reordering.
   const signature = {freq, c, sLength, antennas: antennas.map(a => ({
-    antenna: a, segments: a.segments, currents: a.currentSegments, dl: a.dl,
+    antenna: a, segments: a.segments, currents: a.currentSegments, lengths: a.segmentLengths, dl: a.dl,
     re: a.I0.a, im: a.I0.b
   }))};
   const prev = fieldCacheSignature;
@@ -636,7 +752,7 @@ function startProcessingNewSetup() {
     prev.antennas.length === antennas.length && signature.antennas.every((a,i) => {
       const b = prev.antennas[i];
       return a.antenna === b.antenna && a.segments === b.segments &&
-        a.currents === b.currents && a.dl === b.dl && a.re === b.re && a.im === b.im;
+        a.currents === b.currents && a.lengths === b.lengths && a.dl === b.dl && a.re === b.re && a.im === b.im;
     });
   // Limit the aggregate panning cache to roughly four current viewports.
   if (!same || EM_phase_amp_map.size > 4 * M * N) EM_phase_amp_map = new Map();
@@ -961,49 +1077,11 @@ function renderFields() {
       }
     }
 
-    for (let b = 0; b < antennas.length; b++) {
-      antenna = antennas[b];
-
-      segments = antenna.getSegments();
-      currentSegments = antenna.getCurrentSegments();
-
-      for (let j = 0; j < segments.length - 1; j++) {
-        let x = segments[j][0];
-        let x_next = segments[j + 1][0];
-
-        let y = segments[j][1];
-        let y_next = segments[j + 1][1];
-
-        currentSegement = currentSegments[j];
-
-        let currentAmp = Math.sqrt(
-          currentSegement[0] * currentSegement[0] +
-            currentSegement[1] * currentSegement[1]
-        );
-
-        const drive = antenna.getI0();
-        const currentMag = Math.abs(currentAmp * (drive.a * ct - drive.b * st));
-        const currentColorMag = 255 * squiz(currentMag, k8, 256);
-
-        if (
-          antenna.getSegFlags()[j] &&
-          conScreenX(Math.max(x, x_next)) < width &&
-          conScreenY(Math.max(y, y_next)) < height
-        ) {
-          thickLine(
-            [conScreenX(x), conScreenY(y)],
-            [conScreenX(x_next), conScreenY(y_next)],
-            thickDipole * zoom,
-            [currentColorMag, currentColorMag, 0]
-          );
-        }
-      }
-    }
     pop();
   }
 
 }
-// UI-only upgrade: no new antenna models or changes to field integration.
+// Component palette and inspector share model-supplied geometry/properties.
 // Self-contained drop-in sketch: native HTML/CSS are mounted by setup().
 let selectedComponent = null;
 let activeTool = 'select';
@@ -1014,20 +1092,33 @@ let hoverPoint = null;
 let componentSerial = 0;
 let ui = {};
 
-// The palette owns placement; the solver continues to receive the same Dipoles.
+// Descriptors own placement; the solver sees only complex current elements.
 const componentTypes = {
   dipole: {
-    name: 'Center-fed dipole',
-    description: 'Two endpoints · sinusoidal current',
-    create(a, b) {
-      const source = new Dipole(c / freq, a, b, defAmp, 0, thickDipole / Scale);
-      source.setDl(resolution === 1 ? dl_lr : resolution === 2 ? dl_mr : dl_hr);
-      source.componentType = 'dipole';
-      source.label = `Dipole ${++componentSerial}`;
-      return source;
-    }
+    name:'Center-fed dipole', description:'Two endpoints · sinusoidal current',
+    firstHint:'Click the first endpoint', secondHint:'Click the second endpoint',
+    validate:(a,b)=>length2D(a,b)>defaultDipoleSep+.01,
+    invalidHint:'Choose a second endpoint farther than the feed gap',
+    create:(a,b)=>configureSource(new Dipole(c/freq,a,b,defAmp,0,thickDipole/Scale),'dipole','Dipole')
+  },
+  hertzian: {
+    name:'Hertzian dipole', description:'Position + direction · ideal current element',
+    firstHint:'Click the source position', secondHint:'Click to set direction (symbol length is not physical)',
+    validate:(a,b)=>length2D(a,b)>.001,
+    invalidHint:'Choose a different point to set the direction',
+    create:(a,b)=>configureSource(new HertzianDipole(c/freq,a,Math.atan2(b[1]-a[1],b[0]-a[0]),1,0),'hertzian','Hertzian')
+  },
+  smallLoop: {
+    name:'Small loop', description:'Click a center · uniform circulating current', oneClick:true,
+    firstHint:'Click the loop center; adjust radius in Properties',
+    create:a=>configureSource(new SmallLoop(c/freq,a,.08*(c/freq)/(2*Math.PI),defAmp,0),'smallLoop','Loop')
   }
 };
+function configureSource(source,type,name) {
+  source.setDl(resolution===1?dl_lr:resolution===2?dl_mr:dl_hr);
+  source.componentType=type; source.label=`${name} ${++componentSerial}`;
+  return source;
+}
 
 const interfaceCSS = `
 html,body {margin:0!important;padding:0!important;width:100%;height:100%;overflow:hidden;background:#090d13;}
@@ -1061,6 +1152,9 @@ html,body {margin:0!important;padding:0!important;width:100%;height:100%;overflo
 #em-app .palette {position:absolute;top:14px;left:14px;width:min(280px,calc(100% - 28px));z-index:2;background:#151e2a;border:1px solid #405368;border-radius:11px;padding:14px;box-shadow:0 12px 40px #0008;}
 #em-app .eyebrow {text-transform:uppercase;letter-spacing:1.5px;font-size:10px;font-weight:650;color:var(--muted);margin:0 0 12px;}
 #em-app .palette button {width:100%;text-align:left;padding:12px;white-space:normal;}
+#em-app .palette button + button {margin-top:8px;}
+#em-app .model-note {font-size:11px;line-height:1.6;color:var(--muted);margin:10px 0;}
+#em-app .model-note.warning {color:#f5c781;}
 #em-app .palette small {display:block;color:var(--muted);margin-top:4px;}
 #em-app .inspector {min-height:0;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:20px 18px;}
 #em-app h2 {font-size:18px;margin:0 0 4px;letter-spacing:-.4px;}
@@ -1159,7 +1253,7 @@ function mountInterface() {
     resolution = +e.target.value;
     sLength = resolution === 3 ? 2 : resolution === 2 ? 4 : 5;
     arrow_spacing = resolution === 3 ? 10 : resolution === 2 ? 5 : 4;
-    requestFieldUpdate();
+    renderInspector(); requestFieldUpdate();
   };
   find('clear').onclick = () => {
     antennas = []; selectedComponent = null; setTool('select');
@@ -1198,7 +1292,8 @@ function setTool(tool) {
   updateHint();
 }
 function updateHint(message) {
-  ui.hint.textContent = message || (activeTool === 'add' ? (placementStart ? 'Click the second endpoint · Esc to cancel' : 'Click the first endpoint · Esc to cancel') : activeTool === 'pan' ? 'Drag to pan · Wheel to zoom' : 'Select a wire to edit its properties · Add to place a dipole');
+  const descriptor=componentTypes[placementType];
+  ui.hint.textContent = message || (activeTool==='add' && descriptor ? `${placementStart?descriptor.secondHint:descriptor.firstHint} · Esc to cancel` : activeTool==='pan' ? 'Drag to pan · Wheel to zoom' : 'Select a source to edit its properties · Add to place an antenna');
 }
 function selectComponent(component) {
   selectedComponent = component;
@@ -1227,11 +1322,7 @@ function renderInspector() {
   ui.properties.appendChild(subtitle);
   const section = document.createElement('div'); section.className = 'section'; ui.properties.appendChild(section);
   // A shared inspector consumes property descriptors; no per-source floating boxes.
-  const properties = [
-    {key:'amp', label:'Current amplitude', min:0, max:maxAmp, step:0.1, get:()=>a.getAmp(), set:v=>a.setAmp(v)},
-    {key:'phase', label:'Phase (°)', min:0, max:360, step:1, get:()=>a.getPhase()*180/Math.PI, set:v=>a.setPhase(v*Math.PI/180)},
-    {key:'gap', label:'Feed gap', min:0, max:Math.min(maxSep, Math.max(0,a.getLength()-0.01)), step:0.01, get:()=>a.getSep(), set:v=>a.setSep(v)}
-  ];
+  const properties = a.getProperties();
   for (const property of properties) {
     const row = document.createElement('div'); row.className = 'property';
     row.innerHTML = `<div class="property-head"><label for="em-prop-${property.key}">${property.label}</label><input id="em-prop-${property.key}" type="number" min="${property.min}" max="${property.max}" step="${property.step}"></div><input type="range" min="${property.min}" max="${property.max}" step="${property.step}" aria-label="${property.label} slider">`;
@@ -1244,16 +1335,29 @@ function renderInspector() {
       if (!Number.isFinite(value)) { number.value = range.value = Number(property.get().toFixed(4)); return; }
       value = Math.max(property.min, Math.min(property.max,value));
       property.set(value); number.value = range.value = Number(value.toFixed(4));
+      renderModelReadouts(a,readout);
       requestFieldUpdate();
     };
     number.onchange = () => commit(number); range.onchange = () => commit(range);
     section.appendChild(row);
   }
   const readout = document.createElement('div');
-  readout.innerHTML = `<div class="readout"><span>Length</span><output>${a.getLength().toFixed(3)}</output></div><div class="readout"><span>Electrical length · L/λ</span><output>${(a.getLength()*freq/c).toFixed(3)}</output></div>`;
+  renderModelReadouts(a,readout);
   section.appendChild(readout);
   const del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete component';
   del.onclick = deleteSelected; section.appendChild(del);
+}
+function renderModelReadouts(source,container) {
+  container.replaceChildren();
+  for(const [label,value] of source.getReadouts()) {
+    const row=document.createElement('div'); row.className='readout';
+    const caption=document.createElement('span'); caption.textContent=label;
+    const output=document.createElement('output'); output.textContent=value;
+    row.append(caption,output); container.appendChild(row);
+  }
+  for(const note of source.getNotes()) {
+    const el=document.createElement('p'); el.className='model-note'+(note.warning?' warning':''); el.textContent=note.text; container.appendChild(el);
+  }
 }
 function deleteSelected() {
   if (!selectedComponent) return;
@@ -1281,16 +1385,18 @@ function pointerLocation(e) {
 }
 function hitComponent(point) {
   for (let i=antennas.length-1;i>=0;i--) {
-    const a=antennas[i], p=[conScreenX(a.endPointA[0]),conScreenY(a.endPointA[1])], q=[conScreenX(a.endPointB[0]),conScreenY(a.endPointB[1])];
-    const dx=q[0]-p[0], dy=q[1]-p[1], d=dx*dx+dy*dy;
-    const t=d ? Math.max(0,Math.min(1,((point[0]-p[0])*dx+(point[1]-p[1])*dy)/d)) : 0;
-    if (Math.hypot(point[0]-p[0]-t*dx,point[1]-p[1]-t*dy)<=Math.max(9,thickDipole*zoom/2+4)) return a;
+    const a=antennas[i];
+    for(const edge of a.getHitEdges()) {
+      const p=edge.a,q=edge.b,dx=q[0]-p[0],dy=q[1]-p[1],d=dx*dx+dy*dy;
+      const t=d?Math.max(0,Math.min(1,((point[0]-p[0])*dx+(point[1]-p[1])*dy)/d)):0;
+      if(Math.hypot(point[0]-p[0]-t*dx,point[1]-p[1]-t*dy)<=Math.max(9,edge.width/2+4)) return a;
+    }
   }
   return null;
 }
 function bindCanvasEvents() {
   const canvas=ui.canvas;
-  canvas.tabIndex=0; canvas.setAttribute('aria-label','Electromagnetic field. Use Add, then click two endpoints to place a dipole.');
+  canvas.tabIndex=0; canvas.setAttribute('aria-label','Electromagnetic field. Choose a source from Add and follow the placement hint.');
   canvas.addEventListener('pointerdown',e=>{
     if (pointerGesture || (e.button!==0 && e.button!==1)) return;
     e.preventDefault(); canvas.focus(); closePalette();
@@ -1316,9 +1422,10 @@ function bindCanvasEvents() {
     if (g.moved || point[0]<0 || point[0]>width || point[1]<0 || point[1]>height) return;
     if (activeTool==='add') {
       const world=[conMyX(point[0]),conMyY(point[1])];
-      if (!placementStart) { placementStart=world; updateHint(); return; }
-      if (length2D(placementStart,world)<=defaultDipoleSep+0.01) { updateHint('Choose a second endpoint farther than the feed gap'); return; }
-      const a=componentTypes[placementType].create(placementStart,world);
+      const descriptor=componentTypes[placementType];
+      if (!descriptor.oneClick && !placementStart) { placementStart=world; updateHint(); return; }
+      if (!descriptor.oneClick && !descriptor.validate(placementStart,world)) { updateHint(descriptor.invalidHint); return; }
+      const a=descriptor.oneClick?descriptor.create(world):descriptor.create(placementStart,world);
       antennas.push(a); setTool('select'); selectComponent(a); requestFieldUpdate();
     } else selectComponent(hitComponent(point));
   });
@@ -1370,22 +1477,34 @@ function draw() {
     else startProcessingNewSetup();
   }
 }
+function screenPoint(p) { return [conScreenX(p[0]),conScreenY(p[1])]; }
+function currentColor(source,index) {
+  if(!simulate) return [200,213,226];
+  const j=source.currentSegments[index], drive=source.I0;
+  const re=drive.a*frameCos-drive.b*frameSin, im=drive.a*frameSin+drive.b*frameCos;
+  const magnitude=Math.hypot(j[0]*re-j[2]*im,j[1]*re-j[3]*im);
+  const bright=255*squiz(magnitude,k8,256);
+  return [bright,bright,0];
+}
 function drawComponentOverlay() {
   push();
-  if (!simulate) for (const a of antennas) {
-    const segments=a.getSegments();
-    for(let j=0;j<segments.length-1;j++) if(a.getSegFlags()[j]) thickLine([conScreenX(segments[j][0]),conScreenY(segments[j][1])],[conScreenX(segments[j+1][0]),conScreenY(segments[j+1][1])],thickDipole*zoom,[200,213,226]);
+  for(const a of antennas) {
+    for(const edge of a.getDisplayEdges()) {
+      if(length2D(edge.a,edge.b)>1e-10) thickLine(edge.a,edge.b,edge.width,currentColor(a,edge.current));
+    }
   }
   if (selectedComponent) {
     stroke(119,226,195); strokeWeight(1.5); noFill();
-    for (const p of [selectedComponent.endPointA,selectedComponent.endPointB]) circle(conScreenX(p[0]),conScreenY(p[1]),thickDipole*zoom+9);
+    for (const p of selectedComponent.getSelectionPoints()) circle(p[0],p[1],10);
   }
   if(activeTool==='add' && placementStart && hoverPoint) {
-    stroke(119,226,195); strokeWeight(2);
-    drawingContext.setLineDash([6,5]);
-    line(conScreenX(placementStart[0]),conScreenY(placementStart[1]),conScreenX(conMyX(hoverPoint[0])),conScreenY(conMyY(hoverPoint[1])));
-    drawingContext.setLineDash([]);
-    noFill(); circle(conScreenX(placementStart[0]),conScreenY(placementStart[1]),10);
+    const end=[conMyX(hoverPoint[0]),conMyY(hoverPoint[1])];
+    stroke(119,226,195); strokeWeight(2); drawingContext.setLineDash([6,5]);
+    if(placementType==='hertzian') {
+      const center=screenPoint(placementStart),angle=Math.atan2(end[1]-placementStart[1],end[0]-placementStart[0]);
+      line(center[0]-18*Math.cos(angle),center[1]+18*Math.sin(angle),center[0]+18*Math.cos(angle),center[1]-18*Math.sin(angle));
+    } else line(conScreenX(placementStart[0]),conScreenY(placementStart[1]),conScreenX(end[0]),conScreenY(end[1]));
+    drawingContext.setLineDash([]); noFill(); circle(conScreenX(placementStart[0]),conScreenY(placementStart[1]),10);
   }
   pop();
 }
