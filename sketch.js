@@ -1572,7 +1572,7 @@ function setup() {
   pixelDensity(1); frameRate(60);
   orig=[width/2+.1,height/2+.1];
   // Same default source construction as before, now centered in the workspace.
-  const moment = 1; // Same current moment |Iℓ| for both
+  const moment = 10; // Same current moment |Iℓ| for both
 
   // Horizontal Hertzian dipole: orientation 0°, phase 0°
   const horizontal = configureSource(
