@@ -348,7 +348,7 @@ class SmallLoop extends Antenna {
   setDl(dl) { if(this.dl===dl) return; this.dl=dl; this.setCurrentSegments(); }
   getProperties() {
     const props=super.getProperties();
-    props[0].max=10000; props[0].scale='log';
+    props[0].max=5000; props[0].scale='log';
     return [...props,{key:'radius',label:'Loop radius',min:.001,max:2,step:.001,get:()=>this.radius,set:v=>this.setRadius(v)}];
   }
   getReadouts() {
@@ -356,7 +356,7 @@ class SmallLoop extends Antenna {
     return [['Circumference',circumference.toFixed(4)],['Electrical size · C/λ',(circumference/this.wavelength).toFixed(4)],['Magnetic moment |I·area|',(this.amp*Math.PI*this.radius*this.radius).toPrecision(4)],['Current profile','Uniform · positive CCW']];
   }
   getNotes() {
-    const notes=[{text:'Current slider uses a logarithmic scale from 0 to 10,000. Small loops may need much higher current for a visible field; the numeric value is the actual source current.'},{text:'Loop lies in the XY plane (normal +z). Current is prescribed uniformly around the closed wire; there is no feed gap.'}];
+    const notes=[{text:'Current slider uses a logarithmic scale from 0 to 5,000. Small loops may need much higher current for a visible field; the numeric value is the actual source current.'},{text:'Loop lies in the XY plane (normal +z). Current is prescribed uniformly around the closed wire; there is no feed gap.'}];
     if(2*Math.PI*this.radius/this.wavelength>.1+1e-12) notes.push({warning:true,text:'C/λ exceeds 0.1. The uniform current is still prescribed, but is outside the small-loop approximation; no real feed response is being solved.'});
     if(this.radius*Scale*zoom<14) notes.push({text:'The ring symbol is enlarged for visibility. Only the radius value sets the field geometry.'});
     if(this.radius<Math.max(.1,sLength/Scale)) notes.push({text:'This loop is smaller than the smoothing/grid scale. Its near-source field is approximate; inspect the field away from the ring.'});
@@ -374,6 +374,90 @@ class SmallLoop extends Antenna {
     const p=screenPoint(this.center),r=Math.max(14,this.radius*Scale*zoom);
     return [[p[0]+r,p[1]],[p[0]-r,p[1]]];
   }
+}
+
+const ARRAY_DEFAULT_AMPLITUDE = {
+  hertzian: 10,
+  smallLoop: 200
+};
+
+// One scene component; unit-drive currents contain the progressive phase.
+// Global amplitude/phase remain in I0, preserving cheap drive-only cache reuse.
+class LinearArray extends Antenna {
+  constructor(wavelength,center,axisAngle=0) {
+    super(wavelength, ARRAY_DEFAULT_AMPLITUDE.hertzian, 0);
+    this.center=[...center]; this.axisAngle=axisAngle;
+    this.elementType='hertzian'; this.elementAngle=Math.PI/2;
+    this.count=6; this.spacingLambda=.2; this.phaseStep=0;
+    this.radiusLambda=.08/(2*Math.PI);
+    this.setCurrentSegments();
+  }
+  setCurrentSegments() {
+    this.segments=[]; this.currentSegments=[]; this.segFlags=[];
+    this.elements=[]; this.elementOffsets=[];
+    const lengths=[],d=this.spacingLambda*this.wavelength;
+    for(let n=0;n<this.count;n++) {
+      const offset=(n-(this.count-1)/2)*d;
+      const position=[this.center[0]+offset*Math.cos(this.axisAngle),this.center[1]+offset*Math.sin(this.axisAngle)];
+      const element=this.elementType==='hertzian'
+        ? new HertzianDipole(this.wavelength,position,this.elementAngle,1,0)
+        : new SmallLoop(this.wavelength,position,this.radiusLambda*this.wavelength,1,0);
+      element.setDl(this.dl);
+      this.elementOffsets.push(this.segments.length); this.elements.push(element);
+      const re=Math.cos(n*this.phaseStep),im=Math.sin(n*this.phaseStep);
+      for(let j=0;j<element.segments.length;j++) {
+        const v=element.currentSegments[j];
+        this.segments.push(element.segments[j]);
+        this.currentSegments.push(new Float64Array([v[0]*re-v[2]*im,v[1]*re-v[3]*im,v[0]*im+v[2]*re,v[1]*im+v[3]*re]));
+        lengths.push(element.segmentLengths[j]); this.segFlags.push(true);
+      }
+    }
+    this.segmentLengths=new Float64Array(lengths);
+  }
+  setAxisAngle(v) { this.axisAngle=v; this.setCurrentSegments(); }
+  setDl(v) { if(this.dl===v) return; this.dl=v; this.setCurrentSegments(); }
+  setWavelength(v) { if(this.wavelength===v) return; this.wavelength=v; this.setCurrentSegments(); }
+  getProperties() {
+    const degrees=v=>((v*180/Math.PI)%360+360)%360;
+    const edit=(key,label,min,max,step,get,set)=>({key,label,min,max,step,get,set});
+    const rebuild=(key,value)=>{this[key]=value;this.setCurrentSegments();};
+    const drive=super.getProperties();
+    drive[0].label=this.elementType==='hertzian'?'Global moment |Iℓ| / element':'Global current / element';
+    drive[0].max=this.elementType==='hertzian'?maxAmp:1000;
+    if(this.elementType==='smallLoop') drive[0].scale='log';
+    drive[1].label='Global phase · element 0 (°)';
+    const props=[{key:'elementType',label:'Element type',options:[['hertzian','Hertzian dipole'],['smallLoop','Small circular loop']],get:()=>this.elementType,set:v=>{
+  this.setAmp(ARRAY_DEFAULT_AMPLITUDE[v]);
+  rebuild('elementType',v);
+}},
+      ...drive,
+      edit('count','Number of elements',1,32,1,()=>this.count,v=>rebuild('count',Math.round(v))),
+      edit('spacing','Spacing (λ)',.01,2,.01,()=>this.spacingLambda,v=>rebuild('spacingLambda',v)),
+      edit('phaseStep','Phase step (°)',-180,180,1,()=>this.phaseStep*180/Math.PI,v=>rebuild('phaseStep',v*Math.PI/180)),
+      edit('axis','Array axis (°)',0,360,1,()=>degrees(this.axisAngle),v=>this.setAxisAngle(v*Math.PI/180))];
+    if(this.elementType==='hertzian') props.push(edit('elementAngle','Dipole orientation (°)',0,360,1,()=>degrees(this.elementAngle),v=>rebuild('elementAngle',v*Math.PI/180)));
+    else props.push(edit('loopRadius','Loop radius (λ)',.001,.1,.001,()=>this.radiusLambda,v=>rebuild('radiusLambda',v)));
+    return props;
+  }
+  getReadouts() { return [['Spacing · simulation units',(this.spacingLambda*this.wavelength).toFixed(4)],['Array span · λ',((this.count-1)*this.spacingLambda).toFixed(3)],['Excitation','Equal amplitude · phase φ₀ + nΔφ']]; }
+  getNotes() {
+    const notes=[{text:'Click the center, then set the array axis. Drag the green axis handle to rotate a selected array. Element 0 is at the negative end of the axis. Spacing in λ follows frequency and wave speed.'},
+      {text:'Prescribed independent excitations; mutual coupling is not modeled. More elements increase computation time.'}];
+    if(this.elementType==='smallLoop') {
+      notes.push({text:'All loops lie in XY with normal +z, as in the standalone loop model. Ring symbols may be enlarged for visibility.'});
+      if(2*Math.PI*this.radiusLambda>.1+1e-12) notes.push({warning:true,text:'C/λ exceeds 0.1: outside the small-loop approximation.'});
+      if(this.spacingLambda<2*this.radiusLambda) notes.push({warning:true,text:'Adjacent physical loops overlap at this spacing.'});
+    }
+    return notes;
+  }
+  getDisplayEdges() {
+    return this.elements.flatMap((element,n)=>element.getDisplayEdges().map(edge=>({...edge,current:edge.current+this.elementOffsets[n]})));
+  }
+  getAxisHandle() {
+    const p=screenPoint(this.center),r=Math.max(50,(this.count-1)*this.spacingLambda*this.wavelength*Scale*zoom/2+30);
+    return [p[0]+r*Math.cos(this.axisAngle),p[1]-r*Math.sin(this.axisAngle)];
+  }
+  getSelectionPoints() { return [screenPoint(this.center),this.getAxisHandle()]; }
 }
 
 // Converted ComplexNum class from Java to JavaScript
@@ -1112,10 +1196,16 @@ const componentTypes = {
     invalidHint:'Choose a different point to set the direction',
     create:(a,b)=>configureSource(new HertzianDipole(c/freq,a,Math.atan2(b[1]-a[1],b[0]-a[0]),10,0),'hertzian','Hertzian')
   },
+  linearArray: {
+    name:'Linear array', description:'Center + axis · dipoles or circular loops',
+    firstHint:'Click the array center', secondHint:'Click to set the positive array axis',
+    validate:(a,b)=>length2D(a,b)>.001, invalidHint:'Choose a different point to set the axis',
+    create:(a,b)=>configureSource(new LinearArray(c/freq,a,Math.atan2(b[1]-a[1],b[0]-a[0])),'linearArray','Array')
+  },
   smallLoop: {
     name:'Small loop', description:'Click a center · uniform circulating current', oneClick:true,
     firstHint:'Click the loop center; adjust radius in Properties',
-    create:a=>configureSource(new SmallLoop(c/freq,a,.08*(c/freq)/(2*Math.PI),defAmp*100,0),'smallLoop','Loop')
+    create:a=>configureSource(new SmallLoop(c/freq,a,.08*(c/freq)/(2*Math.PI),100*defAmp,0),'smallLoop','Loop')
   }
 };
 function configureSource(source,type,name) {
@@ -1329,6 +1419,14 @@ function renderInspector() {
   const properties = a.getProperties();
   for (const property of properties) {
     const row = document.createElement('div'); row.className = 'property';
+    if(property.options) {
+      const label=document.createElement('label'); label.textContent=property.label;
+      const select=document.createElement('select'); select.id='em-prop-'+property.key; label.htmlFor=select.id;
+      for(const [value,text] of property.options) { const option=document.createElement('option'); option.value=value; option.textContent=text; select.appendChild(option); }
+      select.value=property.get();
+      select.onchange=()=>{ if(selectedComponent!==a || !antennas.includes(a)) return; property.set(select.value); renderInspector(); requestFieldUpdate(); };
+      row.append(label,select); section.appendChild(row); continue;
+    }
     row.innerHTML = `<div class="property-head"><label for="em-prop-${property.key}">${property.label}</label><input id="em-prop-${property.key}" type="number" min="${property.min}" max="${property.max}" step="${property.step}"></div><input type="range" min="${property.min}" max="${property.max}" step="${property.step}" aria-label="${property.label} slider">`;
     const [number, range] = row.querySelectorAll('input');
     const logarithmic=property.scale==='log';
@@ -1346,7 +1444,7 @@ function renderInspector() {
       let value = input===range?fromRange():input.valueAsNumber;
       if (!Number.isFinite(value)) { syncInputs(property.get()); return; }
       value = Math.max(property.min, Math.min(property.max,value));
-      property.set(value); syncInputs(value);
+      property.set(value); syncInputs(property.get());
       renderModelReadouts(a,readout);
       requestFieldUpdate();
     };
@@ -1416,12 +1514,20 @@ function bindCanvasEvents() {
     pointerGesture={id:e.pointerId, start:point, last:point, pan:activeTool==='pan'||e.button===1, moved:false};
     canvas.setPointerCapture(e.pointerId);
     if (pointerGesture.pan) canvas.style.cursor='grabbing';
+    else if(activeTool==='select' && selectedComponent instanceof LinearArray && length2D(point,selectedComponent.getAxisHandle())<=12) {
+      pointerGesture.rotate=selectedComponent;
+    }
   });
   canvas.addEventListener('pointermove',e=>{
     const point=pointerLocation(e); hoverPoint=point;
     if (!pointerGesture || pointerGesture.id!==e.pointerId) return;
     const g=pointerGesture;
     if (Math.hypot(point[0]-g.start[0],point[1]-g.start[1])>4) g.moved=true;
+    if(g.rotate) {
+      const world=[conMyX(point[0]),conMyY(point[1])],a=g.rotate;
+      if(length2D(world,a.center)>.001) a.setAxisAngle(Math.atan2(world[1]-a.center[1],world[0]-a.center[0]));
+      return;
+    }
     if (g.pan) { orig[0]+=point[0]-g.last[0]; orig[1]+=point[1]-g.last[1]; waitProcess=true; processingScheduled=false; }
     g.last=point;
   });
@@ -1430,6 +1536,7 @@ function bindCanvasEvents() {
     const g=pointerGesture, point=pointerLocation(e); pointerGesture=null;
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     canvas.style.cursor=activeTool==='pan'?'grab':activeTool==='add'?'crosshair':'default';
+    if (g.rotate) { renderInspector(); requestFieldUpdate(); return; }
     if (g.pan) { requestFieldUpdate(); return; }
     if (g.moved || point[0]<0 || point[0]>width || point[1]<0 || point[1]>height) return;
     if (activeTool==='add') {
@@ -1443,7 +1550,7 @@ function bindCanvasEvents() {
   });
   const cancel=e=>{
     if (!pointerGesture || pointerGesture.id!==e.pointerId) return;
-    const wasPan=pointerGesture.pan; pointerGesture=null;
+    const wasPan=pointerGesture.pan || !!pointerGesture.rotate; pointerGesture=null;
     canvas.style.cursor=activeTool==='pan'?'grab':activeTool==='add'?'crosshair':'default';
     if (wasPan) requestFieldUpdate();
   };
@@ -1465,27 +1572,8 @@ function setup() {
   pixelDensity(1); frameRate(60);
   orig=[width/2+.1,height/2+.1];
   // Same default source construction as before, now centered in the workspace.
-  const moment = 10; // Same current moment |Iℓ| for both
-
-  // Horizontal Hertzian dipole: orientation 0°, phase 0°
-  const horizontal = configureSource(
-    new HertzianDipole(c / freq, [0, 0], 0, moment, 0),
-    'hertzian',
-    'Hertzian'
-  );
-  
-  // Vertical Hertzian dipole: orientation 90°, phase +90°
-  const vertical = configureSource(
-    new HertzianDipole(
-      c / freq, [0, 0], Math.PI / 2, moment, Math.PI / 2
-    ),
-    'hertzian',
-    'Hertzian'
-  );
-  
-  antennas.push(horizontal, vertical);
-  selectedComponent = horizontal;
-  
+  const a=componentTypes.dipole.create([conMyX(.05+width/2),conMyY(2*height/3)],[conMyX(width/2),conMyY(height/3)]);
+  antennas.push(a); selectedComponent=a;
   bindCanvasEvents(); setTool('select'); renderInspector(); renderScene();
   time=millis()/timeScale;
 }
@@ -1526,6 +1614,11 @@ function drawComponentOverlay() {
   }
   if (selectedComponent) {
     stroke(119,226,195); strokeWeight(1.5); noFill();
+    if(selectedComponent instanceof LinearArray) {
+      const p=screenPoint(selectedComponent.center),handle=selectedComponent.getAxisHandle();
+      drawingContext.setLineDash([4,4]); line(...p,...handle); drawingContext.setLineDash([]);
+      circle(handle[0],handle[1],16);
+    }
     for (const p of selectedComponent.getSelectionPoints()) circle(p[0],p[1],10);
   }
   if(activeTool==='add' && placementStart && hoverPoint) {
