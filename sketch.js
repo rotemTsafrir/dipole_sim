@@ -1,4 +1,6 @@
 
+// Converted Java abstract class to JavaScript class structure using p5.js-compatible syntax
+
 class Antenna {
   constructor(wavelength, amp, phase, dl = 0.12) {
     this.wavelength = wavelength;
@@ -345,14 +347,16 @@ class SmallLoop extends Antenna {
   setRadius(radius) { if(!Number.isFinite(radius)||radius<=0) return; this.radius=radius; this.setCurrentSegments(); }
   setDl(dl) { if(this.dl===dl) return; this.dl=dl; this.setCurrentSegments(); }
   getProperties() {
-    return [...super.getProperties(),{key:'radius',label:'Loop radius',min:.001,max:2,step:.001,get:()=>this.radius,set:v=>this.setRadius(v)}];
+    const props=super.getProperties();
+    props[0].max=10000; props[0].scale='log';
+    return [...props,{key:'radius',label:'Loop radius',min:.001,max:2,step:.001,get:()=>this.radius,set:v=>this.setRadius(v)}];
   }
   getReadouts() {
     const circumference=2*Math.PI*this.radius;
     return [['Circumference',circumference.toFixed(4)],['Electrical size · C/λ',(circumference/this.wavelength).toFixed(4)],['Magnetic moment |I·area|',(this.amp*Math.PI*this.radius*this.radius).toPrecision(4)],['Current profile','Uniform · positive CCW']];
   }
   getNotes() {
-    const notes=[{text:'Loop lies in the XY plane (normal +z). Current is prescribed uniformly around the closed wire; there is no feed gap.'}];
+    const notes=[{text:'Current slider uses a logarithmic scale from 0 to 10,000. Small loops may need much higher current for a visible field; the numeric value is the actual source current.'},{text:'Loop lies in the XY plane (normal +z). Current is prescribed uniformly around the closed wire; there is no feed gap.'}];
     if(2*Math.PI*this.radius/this.wavelength>.1+1e-12) notes.push({warning:true,text:'C/λ exceeds 0.1. The uniform current is still prescribed, but is outside the small-loop approximation; no real feed response is being solved.'});
     if(this.radius*Scale*zoom<14) notes.push({text:'The ring symbol is enlarged for visibility. Only the radius value sets the field geometry.'});
     if(this.radius<Math.max(.1,sLength/Scale)) notes.push({text:'This loop is smaller than the smoothing/grid scale. Its near-source field is approximate; inspect the field away from the ring.'});
@@ -1111,7 +1115,7 @@ const componentTypes = {
   smallLoop: {
     name:'Small loop', description:'Click a center · uniform circulating current', oneClick:true,
     firstHint:'Click the loop center; adjust radius in Properties',
-    create:a=>configureSource(new SmallLoop(c/freq,a,.08*(c/freq)/(2*Math.PI),defAmp,0),'smallLoop','Loop')
+    create:a=>configureSource(new SmallLoop(c/freq,a,.08*(c/freq)/(2*Math.PI),defAmp*100,0),'smallLoop','Loop')
   }
 };
 function configureSource(source,type,name) {
@@ -1327,14 +1331,22 @@ function renderInspector() {
     const row = document.createElement('div'); row.className = 'property';
     row.innerHTML = `<div class="property-head"><label for="em-prop-${property.key}">${property.label}</label><input id="em-prop-${property.key}" type="number" min="${property.min}" max="${property.max}" step="${property.step}"></div><input type="range" min="${property.min}" max="${property.max}" step="${property.step}" aria-label="${property.label} slider">`;
     const [number, range] = row.querySelectorAll('input');
-    number.value = range.value = Number(property.get().toFixed(4));
-    range.oninput = () => { number.value = range.value; };
+    const logarithmic=property.scale==='log';
+    if(logarithmic) { range.min=0; range.max=1000; range.step=1; range.setAttribute('aria-label',property.label+' logarithmic slider'); }
+    const fromRange=()=>logarithmic?Math.expm1(range.valueAsNumber/1000*Math.log1p(property.max)):range.valueAsNumber;
+    const syncInputs=value=>{
+      number.value=Number(value.toFixed(4));
+      range.value=logarithmic?1000*Math.log1p(value)/Math.log1p(property.max):value;
+      range.setAttribute('aria-valuetext',String(Number(value.toFixed(4))));
+    };
+    syncInputs(property.get());
+    range.oninput = () => { number.value=Number(fromRange().toFixed(4)); range.setAttribute('aria-valuetext',number.value); };
     const commit = input => {
       if (selectedComponent !== a || !antennas.includes(a)) return;
-      let value = input.valueAsNumber;
-      if (!Number.isFinite(value)) { number.value = range.value = Number(property.get().toFixed(4)); return; }
+      let value = input===range?fromRange():input.valueAsNumber;
+      if (!Number.isFinite(value)) { syncInputs(property.get()); return; }
       value = Math.max(property.min, Math.min(property.max,value));
-      property.set(value); number.value = range.value = Number(value.toFixed(4));
+      property.set(value); syncInputs(value);
       renderModelReadouts(a,readout);
       requestFieldUpdate();
     };
