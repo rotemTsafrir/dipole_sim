@@ -1,10 +1,4 @@
-/*
- * EM Simulator — HTML controls and shared inspector (2026-10-04)
- * Replace the existing sketch.js; keep the current p5.js script include.
- * HTML and scoped CSS are created in setup(), so no other file is required.
- * Select (V), Pan (H), Add (A), Escape to cancel, Delete selected, 0 reset zoom.
- * Center-fed dipole only. Original current distribution and field solver retained.
- */
+
 // Converted Java abstract class to JavaScript class structure using p5.js-compatible syntax
 
 class Antenna {
