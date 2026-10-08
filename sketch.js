@@ -1,19 +1,3 @@
-// Passive PEC extension (2026-10-06).
-// Add > Passive PEC wire: click both endpoints, then edit radius / mesh.
-// Each interior passive-wire node contributes one complex hat coefficient.
-// Continuous piecewise-linear current, zero open-end current, Galerkin testing.
-// Unknown I has the same normalized current units as a driven wire / loop;
-// moment = I * segmentLength. A Hertzian source's amp already IS a moment.
-// A common analytic Green kernel is used for both the solve and field display.
-// Relative algebraic residual is a numerical check, not a physical error bound.
-// This reduced-kernel thin-wire approximation is not NEC: no connected
-// junction constraints, prescribed active currents, reduced finite-radius kernel.
-// Thin-wire EFIE background: https://nec2.org/part_1/section2.html
-// Changing mesh/radius can change the approximation; inspect convergence before
-// interpreting resonance amplitudes quantitatively. Max 320 passive unknowns.
-
-
-// Converted Java abstract class to JavaScript class structure using p5.js-compatible syntax
 
 class Antenna {
   constructor(wavelength, amp, phase, dl = 0.12) {
@@ -1320,6 +1304,60 @@ function configureSource(source,type,name) {
   return source;
 }
 
+// Example scenes use the exact same component classes and coupled passive solve
+// as manually placed components. Distances are measured relative to lambda.
+const exampleScenes = {
+  rotating: 'Rotating dipoles · spiral waves',
+  yagi: 'Yagi–Uda · passive beam shaping'
+};
+
+function makeRotatingDipoleScene() {
+  const wavelength = c / freq, moment = 10;
+  return [
+    configureSource(new HertzianDipole(wavelength,[0,0],0,moment,0),'hertzian','Hertzian'),
+    configureSource(new HertzianDipole(wavelength,[0,0],Math.PI/2,moment,Math.PI/2),'hertzian','Hertzian')
+  ];
+}
+
+function makeYagiUdaScene() {
+  const wavelength = c / freq;
+  // Boom follows +X; each wire is parallel to Y. The reflector is longer
+  // and the directors are shorter than the prescribed-current driven dipole.
+  // This is a teaching preset, not a feed-matched or gain-optimized design.
+  const rod = (xLambda,lengthLambda,label) => {
+    const x=xLambda*wavelength, half=.5*lengthLambda*wavelength;
+    const wire=configureSource(new PassiveWire(wavelength,[x,-half],[x,half]),'passiveWire','PEC wire');
+    wire.radius=Math.max(.02,Math.min(.08,.012*wavelength));
+    wire.targetLength=Math.max(.15,Math.min(.5,.075*wavelength));
+    wire.rebuild();
+    wire.label=label;
+    return wire;
+  };
+  const reflector=rod(-.42,.52,'Reflector · passive PEC');
+  const drivenX=-.20*wavelength, drivenHalf=.24*wavelength;
+  const driven=configureSource(new Dipole(wavelength,
+    [drivenX,-drivenHalf],[drivenX,drivenHalf],defAmp,0,thickDipole/Scale),
+    'dipole','Dipole');
+  driven.setSep(Math.min(.05,.012*wavelength));
+  driven.label='Driven dipole · active';
+  const director1=rod(-.04,.45,'Director 1 · passive PEC');
+  const director2=rod(.12,.44,'Director 2 · passive PEC');
+  return [reflector,driven,director1,director2];
+}
+
+function loadExampleScene(key,askBeforeReplacing=true) {
+  if (!(key in exampleScenes)) return false;
+  if (askBeforeReplacing && antennas.length &&
+      !window.confirm('Replace the current scene with "'+exampleScenes[key]+'"? Current edits will be lost.')) return false;
+  antennas=key==='yagi'?makeYagiUdaScene():makeRotatingDipoleScene();
+  // Put the new configuration back in view even after user panning/zooming.
+  zoom=1; orig=[width/2+.1,height/2+.1];
+  setTool('select');
+  selectComponent(key==='yagi'?antennas[1]:antennas[0]);
+  requestFieldUpdate();
+  return true;
+}
+
 const interfaceCSS = `
 html,body {margin:0!important;padding:0!important;width:100%;height:100%;overflow:hidden;background:#090d13;}
 #em-app {--panel:#121923;--line:#283340;--muted:#93a3b6;--accent:#77e2c3;position:fixed;inset:0;z-index:10;display:grid;grid-template-rows:auto minmax(0,1fr) auto;color:#e6edf5;background:#090d13;font:13px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;}
@@ -1390,6 +1428,11 @@ function mountInterface() {
     <header class="topbar">
       <div class="brand"><span class="brand-mark" aria-hidden="true">∿</span><div><strong>EM Simulator</strong><small>Electromagnetic workspace</small></div></div>
       <button id="em-play" title="Pause / resume (Space)">Ⅱ Pause</button>
+      <label class="top-control">Examples <select id="em-example" aria-label="Load example scene">
+        <option value="">Load example…</option>
+        <option value="rotating">Rotating dipoles</option>
+        <option value="yagi">Yagi–Uda antenna</option>
+      </select></label>
       <label class="top-control">Field <select id="em-field"><option value="E">Electric field</option><option value="B">Magnetic field</option><option value="S">Energy flux proxy</option></select></label>
       <label class="top-control">Frequency <input id="em-frequency" type="number" min="${minFreq}" max="${maxFreq}" step="0.01" value="${freq}" title="Simulation frequency"></label>
       <label class="top-control">Wave speed <input id="em-speed" type="number" min="${minSpeed}" max="${maxSpeed}" step="0.1" value="${c}" title="Simulation wave speed"></label>
@@ -1432,6 +1475,12 @@ function mountInterface() {
     find('palette-items').appendChild(button);
   }
   ui.play.onclick = togglePause;
+  find('example').onchange = e => {
+    const key=e.target.value;
+    if (key) loadExampleScene(key);
+    // Keep the dropdown an action, not a misleading persistent scene selection.
+    e.target.value='';
+  };
   find('field').onchange = e => {
     show_EField = e.target.value === 'E'; show_BField = e.target.value === 'B'; show_EnergyFlux = e.target.value === 'S';
     find('field-tag').textContent = e.target.selectedOptions[0].textContent + ' · XY plane';
@@ -1677,28 +1726,9 @@ function setup() {
   const canvas=createCanvas(width,height); canvas.parent(ui.workspace); ui.canvas=canvas.elt;
   pixelDensity(1); frameRate(60);
   orig=[width/2+.1,height/2+.1];
-  // Same default source construction as before, now centered in the workspace.
-  const moment = 10; // Same current moment |Iℓ| for both
-
-  // Horizontal Hertzian dipole: orientation 0°, phase 0°
-  const horizontal = configureSource(
-    new HertzianDipole(c / freq, [0, 0], 0, moment, 0),
-    'hertzian',
-    'Hertzian'
-  );
-  
-  // Vertical Hertzian dipole: orientation 90°, phase +90°
-  const vertical = configureSource(
-    new HertzianDipole(
-      c / freq, [0, 0], Math.PI / 2, moment, Math.PI / 2
-    ),
-    'hertzian',
-    'Hertzian'
-  );
-  
-  antennas.push(horizontal, vertical);
-  selectedComponent = horizontal;
-  bindCanvasEvents(); setTool('select'); renderInspector(); renderScene();
+  // Keep the visually distinctive 90°-phase rotating dipole as the default.
+  loadExampleScene('rotating',false);
+  bindCanvasEvents();
   time=millis()/timeScale;
 }
 function draw() {
