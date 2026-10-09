@@ -1433,7 +1433,7 @@ function mountInterface() {
         <option value="rotating">Rotating dipoles</option>
         <option value="yagi">Yagi–Uda antenna</option>
       </select></label>
-      <label class="top-control">Field <select id="em-field"><option value="E">Electric field</option><option value="B">Magnetic field</option><option value="S">Energy flux proxy</option></select></label>
+      <label class="top-control">Field <select id="em-field"><option value="E">Electric field</option><option value="B">Magnetic field</option><option value="S">Energy flux</option></select></label>
       <label class="top-control">Frequency <input id="em-frequency" type="number" min="${minFreq}" max="${maxFreq}" step="0.01" value="${freq}" title="Simulation frequency"></label>
       <label class="top-control">Wave speed <input id="em-speed" type="number" min="${minSpeed}" max="${maxSpeed}" step="0.1" value="${c}" title="Simulation wave speed"></label>
       <label class="top-control">Quality <select id="em-quality"><option value="1">Low</option><option value="2" selected>Medium</option><option value="3">High</option></select></label>
