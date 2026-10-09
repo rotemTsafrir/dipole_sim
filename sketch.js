@@ -751,7 +751,7 @@ let resolution = 2;
 const k1 = 0.5;
 const k1B = 2.5;
 
-const k2 = 0.4;
+const k2 = 2.2;
 
 const k3 = 0.2;
 const k4 = 0.05;
@@ -759,7 +759,7 @@ const k4 = 0.05;
 const k5 = 0.25;
 const k6 = 0.05;
 
-const k7 = 0.6;
+const k7 = 4;
 
 const k8 = 0.25;
 
