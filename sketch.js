@@ -1,4 +1,5 @@
 
+
 class Antenna {
   constructor(wavelength, amp, phase, dl = 0.12) {
     this.wavelength = wavelength;
@@ -755,8 +756,8 @@ const k2 = 0.4;
 const k3 = 0.2;
 const k4 = 0.05;
 
-const k5 = 0.05;
-const k6 = 0.01;
+const k5 = 0.25;
+const k6 = 0.05;
 
 const k7 = 0.6;
 
@@ -1117,7 +1118,7 @@ function renderFields() {
           b = Math.round((b1 + m_val) * 255);
           a = colorSizeEA;
         } else if (show_EnergyFlux) {
-          let Energy_flux_mag = (Ex_t * Ex_t + Ey_t * Ey_t) * Math.abs(B_t);
+          let Energy_flux_mag = Math.sqrt(Ex_t * Ex_t + Ey_t * Ey_t)*Math.abs(B_t);
           let colorSizeEnergyA = squiz(Energy_flux_mag, k5, 256);
           let colorSizeEnergyB = 255 * squiz(Energy_flux_mag, k6, 256);
 
