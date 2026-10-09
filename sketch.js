@@ -748,8 +748,8 @@ let resolution = 2;
 
 //paramaters used for squiz functions
 
-const k1 = 0.5;
-const k1B = 2.5;
+const k1 = 1;
+const k1B = 5;
 
 const k2 = 2.2;
 
