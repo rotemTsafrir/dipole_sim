@@ -753,13 +753,13 @@ const k1B = 2.5;
 
 const k2 = 2.2;
 
-const k3 = 0.2;
-const k4 = 0.05;
+const k3 = 0.3;
+const k4 = 0.075;
 
-const k5 = 0.25;
-const k6 = 0.05;
+const k5 = 1;
+const k6 = 0.2;
 
-const k7 = 4;
+const k7 = 6;
 
 const k8 = 0.25;
 
