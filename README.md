@@ -70,7 +70,7 @@ The wire has no imposed excitation. Its complex current is induced by the active
 
 Each wire is divided into mesh intervals. The unknowns are current phasors at interior nodes, with linear interpolation between nodes and zero current at the two open ends. An $N$-interval wire therefore has $N-1$ complex unknowns.
 
-The inspector reports mesh size, unknown count, peak current, solver residual, and relevant warnings. Yellow brightness represents the magnitude of the instantaneous current, not its sign; the peak-current readout instead uses phasor magnitude.
+The inspector reports mesh size, unknown count, peak current, solver residual, and relevant warnings. Yellow brightness represents the magnitude of the instantaneous current and Yellow chevrons represent the direction; the peak-current readout instead uses phasor magnitude.
 
 **Wires are electrically separate.** Crossing or touching endpoints do not create a junction. Arranging several wires into a polygon does not create an electrically closed loop.
 
