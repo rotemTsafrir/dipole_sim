@@ -315,8 +315,8 @@ class HertzianDipole extends Antenna {
     const start=[p[0]-18*dx,p[1]-18*dy],end=[p[0]+18*dx,p[1]+18*dy];
     return [
       {a:start,b:end,current:0,width:4},
-      {a:end,b:[end[0]-8*dx+5*dy,end[1]-8*dy-5*dx],current:0,width:3},
-      {a:end,b:[end[0]-8*dx-5*dy,end[1]-8*dy+5*dx],current:0,width:3}];
+      {a:[start[0]-4*dy,start[1]+4*dx],b:[start[0]+4*dy,start[1]-4*dx],current:0,width:3,currentDirection:false},
+      {a:[end[0]-4*dy,end[1]+4*dx],b:[end[0]+4*dy,end[1]-4*dx],current:0,width:3,currentDirection:false}];
   }
   getSelectionPoints() { return [screenPoint(this.position)]; }
 }
@@ -1744,7 +1744,7 @@ function mountInterface() {
         <div id="em-properties"></div>
         <div class="section"><p class="eyebrow">Scene <span id="em-count"></span></p><div class="scene-list" id="em-scene"></div></div>
         <div class="section"><button class="danger" id="em-clear">Clear scene</button></div>
-        <div class="section muted">Wheel to zoom · 0 to reset<br>V select · H pan · A add<br>Esc cancel · Delete selected<br><br>Values use the original simulation units.</div>
+        <div class="section muted">Wheel to zoom · 0 to reset<br>V select · H pan · A add<br>Esc cancel · Delete selected<br><br>Values use the original simulation units.<br><br><span style="color:#ffff00">› Yellow wire chevrons: current I(t)</span><br>Direction reverses with the instantaneous conventional current.</div>
       </aside>
     </div>
     <footer class="footer"><span class="status" role="status" id="em-status"></span><span id="em-grid"></span><span id="em-wavelength"></span><div class="zoom-controls"><button id="em-zoom-out" aria-label="Zoom out">−</button><button id="em-zoom-reset" title="Reset zoom (0)">100%</button><button id="em-zoom-in" aria-label="Zoom in">+</button></div></footer>`;
@@ -2057,12 +2057,63 @@ function currentColor(source,index) {
   const bright = 255 * Math.pow(squiz(magnitude, k8, 256), 0.35);
   return [bright,bright,0];
 }
+// Current markers use a separate wire-bound visual language from field vectors.
+const CURRENT_CHEVRON_SPACING = 32; // screen pixels, independent of quality/zoom
+function drawCurrentChevrons(source,edges) {
+  if(!simulate)return;
+  const drive=source.I0,re=drive.a*frameCos-drive.b*frameSin,
+    im=drive.a*frameSin+drive.b*frameCos;
+  const currents=source.displayCurrents||source.currentSegments;
+  const ctx=drawingContext;
+  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();ctx.rect(0,0,width,height);ctx.clip();
+  function drawRun(run,total) {
+    if(total<12)return;
+    const count=Math.max(1,Math.floor(total/CURRENT_CHEVRON_SPACING));
+    let index=0,offset=0;
+    for(let n=0;n<count;n++) {
+      const distance=(n+.5)*total/count;
+      while(index<run.length-1&&offset+run[index].length<distance)offset+=run[index++].length;
+      const {edge,length}=run[index],t=(distance-offset)/length;
+      const x=edge.a[0]+t*(edge.b[0]-edge.a[0]),y=edge.a[1]+t*(edge.b[1]-edge.a[1]);
+      if(x<-10||y<-10||x>width+10||y>height+10)continue;
+      const j=currents[edge.current];if(!j)continue;
+      const ix=j[0]*re-j[2]*im,iy=j[1]*re-j[3]*im,magnitude=Math.hypot(ix,iy);
+      const envelope=Math.hypot(...j)*Math.hypot(drive.a,drive.b);
+      if(!(envelope>0)||!Number.isFinite(magnitude))continue;
+      // Fade relative to this local phasor near its zero crossing, while keeping
+      // absolute brightness on the existing common scale across all components.
+      const ratio=magnitude/envelope,f=Math.max(0,Math.min(1,(ratio-.02)/.18));
+      if(!f||!magnitude)continue;
+      const fade=f*f*(3-2*f),dx=ix/magnitude,dy=-iy/magnitude;
+      const bright=currentColor(source,edge.current)[0];
+      ctx.globalAlpha=fade;
+      ctx.beginPath();
+      ctx.moveTo(x-4*dx-4*dy,y-4*dy+4*dx);
+      ctx.lineTo(x+4*dx,y+4*dy);
+      ctx.lineTo(x-4*dx+4*dy,y-4*dy-4*dx);
+      ctx.strokeStyle='rgba(0,0,0,0.85)';ctx.lineWidth=4;ctx.stroke();
+      ctx.strokeStyle='rgb('+bright+','+bright+',0)';ctx.lineWidth=2;ctx.stroke();
+    }
+  }
+  let run=[],total=0,last=null;
+  for(const edge of edges) {
+    const length=length2D(edge.a,edge.b);
+    if(edge.currentDirection===false||length<1e-10)continue;
+    if(last&&length2D(last,edge.a)>.5){drawRun(run,total);run=[];total=0;}
+    run.push({edge,length});total+=length;last=edge.b;
+  }
+  drawRun(run,total);ctx.restore();
+}
+
 function drawComponentOverlay() {
   push();
   for(const a of antennas) {
-    for(const edge of a.getDisplayEdges()) {
+    const edges=a.getDisplayEdges();
+    for(const edge of edges) {
       if(length2D(edge.a,edge.b)>1e-10) thickLine(edge.a,edge.b,edge.width,currentColor(a,edge.current));
     }
+    drawCurrentChevrons(a,edges);
   }
   if (selectedComponent) {
     stroke(119,226,195); strokeWeight(1.5); noFill();
