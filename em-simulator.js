@@ -1639,7 +1639,7 @@ function loadExampleScene(key,askBeforeReplacing=true) {
   requestFieldUpdate();
   // Put the new configuration back in view even after user panning/zooming.
   zoom=1; orig=[width/2+.1,height/2+.1];
-  setTool('select');
+  setTool('pan');
   selectComponent(key==='yagi'?antennas[1]:antennas[0]);
   requestFieldUpdate();
   return true;
