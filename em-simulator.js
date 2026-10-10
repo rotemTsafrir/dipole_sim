@@ -2018,7 +2018,8 @@ function setup() {
   pixelDensity(1); frameRate(60);
   orig=[width/2+.1,height/2+.1];
   // Keep the visually distinctive 90°-phase rotating dipole as the default.
-  loadExampleScene('rotating',false);
+  loadExampleScene('rotating', false);
+  setTool('pan');
   bindCanvasEvents();
   time=millis()/timeScale;
 }
