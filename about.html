@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About AntennaSim | Interactive Antenna &amp; EM Field Simulator</title>
+  <meta name="description" content="Learn what AntennaSim can visualize: dipoles, loop antennas, phased arrays, Yagi–Uda antennas, electric and magnetic fields, energy flow, and passive-wire currents." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://www.antennasim.com/about.html" />
+  <meta name="theme-color" content="#121923" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="About AntennaSim | Interactive Antenna &amp; EM Field Simulator" />
+  <meta property="og:description" content="Explore how antennas radiate, interfere, and interact with passive conductors using a free browser-based simulator." />
+  <meta property="og:url" content="https://www.antennasim.com/about.html" />
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; background:#090d13; color:#e6edf5; font:16px/1.7 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+    main { max-width: 840px; margin: 0 auto; padding: 48px 24px 70px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+    h1 { font-size:clamp(30px,5vw,46px); line-height:1.12; letter-spacing:-.03em; margin:30px 0 18px; }
+    h2 { font-size:23px; margin:42px 0 12px; }
+    p,li { color:#c7d3df; }
+    a { color:#77e2c3; }
+    .brand { font-weight:700; color:#f2f7fa; font-size:22px; }
+    .back { display:inline-block; border:1px solid #405368; background:#15202d; border-radius:8px; padding:9px 14px; text-decoration:none; }
+    .lead { font-size:20px; color:#e2eaf1; }
+    .panel { border:1px solid #344252; background:#121923; border-radius:12px; padding:16px 22px; margin:24px 0; }
+    .fine { color:#93a3b6; }
+    footer { margin-top:48px; border-top:1px solid #344252; padding-top:20px; color:#93a3b6; font-size:14px; }
+  </style>
+</head>
+<body>
+<main>
+  <header><span class="brand">∿ AntennaSim</span><a class="back" href="/">← Open simulator</a></header>
+  <h1>Explore antenna radiation and electromagnetic fields interactively</h1>
+  <p class="lead">AntennaSim is a free, browser-based educational tool for experimenting with antenna geometries, interference, electromagnetic fields, and induced currents.</p>
+  <p>Instead of only looking at static radiation-pattern plots, you can adjust sources and passive elements and see how the calculated electric field, magnetic field, and energy flow respond.</p>
+  <p><a class="back" href="/">Launch the interactive simulator →</a></p>
+  <h2>What can you simulate?</h2>
+  <div class="panel">
+    <ul>
+      <li><strong>Dipole antennas:</strong> explore center-fed wires, ideal Hertzian dipoles, and how current distribution and geometry affect the fields.</li>
+      <li><strong>Loop antennas:</strong> compare small-loop behavior with other antenna configurations.</li>
+      <li><strong>Phased arrays:</strong> vary spacing, relative phase, and amplitude to study constructive and destructive interference and beam steering.</li>
+      <li><strong>Passive PEC wire elements:</strong> visualize approximately induced current distributions and their influence on the fields.</li>
+      <li><strong>Field visualization:</strong> switch between electric fields, magnetic fields, and energy flux; examine near-field structure and wave propagation.</li>
+    </ul>
+  </div>
+  <h2>Try these built-in examples</h2>
+  <p><strong>Half-wave dipole:</strong> inspect the field around a center-fed antenna. <strong>Yagi–Uda antenna:</strong> explore the effect of a reflector and directors on an antenna's radiation. <strong>Electric quadrupole:</strong> see how two closely spaced, oppositely excited dipoles modify the field. <strong>Rotating dipoles:</strong> examine phase-dependent behavior and polarization.</p>
+  <h2>How to use the simulator</h2>
+  <p>Open the workspace and choose a preset from the <strong>Examples</strong> menu, or use <strong>Add</strong> to place components. Select an element to adjust its parameters, use <strong>Pan</strong> to move across the scene, and use the mouse wheel or zoom buttons to change your view. Change the selected field mode to see different electromagnetic quantities.</p>
+  <h2>Model assumptions and limitations</h2>
+  <p>AntennaSim is intended for learning and qualitative exploration. It uses idealized source models and numerical approximations, including a simplified method for estimating passive-wire currents. Representations in the visualization plane should not be interpreted as a complete three-dimensional field solver. Results depend on model choices and numerical resolution.</p>
+  <p>For antenna design, impedance prediction, efficiency estimates, or safety-critical decisions, validate results with an appropriate full-wave solver or measurements.</p>
+  <h2>Source code</h2>
+  <p>The project is available on <a href="https://github.com/rotemTsafrir/dipole_sim">GitHub</a>. You can inspect the implementation, report issues, or suggest educational examples.</p>
+  <footer>Educational antenna and electromagnetic-field visualization · <a href="/">Return to the simulator</a></footer>
+</main>
+<!-- Cloudflare Web Analytics -->
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "f9fc9782926e4a528c42d783c6e402ba"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</body>
+</html>

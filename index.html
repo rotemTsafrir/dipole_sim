@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:," />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AntennaSim – Interactive Antenna &amp; EM Field Simulator</title>
+    <meta name="description" content="Free interactive antenna and electromagnetic field simulator. Explore dipoles, loops, phased arrays, electric and magnetic fields, radiation patterns, and induced currents in passive wires." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://www.antennasim.com/" />
+    <meta name="theme-color" content="#121923" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AntennaSim" />
+    <meta property="og:title" content="AntennaSim – Interactive Antenna &amp; EM Field Simulator" />
+    <meta property="og:description" content="Explore dipoles, loops, phased arrays and electromagnetic fields in a free interactive antenna simulator." />
+    <meta property="og:url" content="https://www.antennasim.com/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="AntennaSim – Interactive Antenna &amp; EM Field Simulator" />
+    <meta name="twitter:description" content="Visualize antenna radiation, electric and magnetic fields, phased arrays and induced currents interactively." />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "AntennaSim",
+      "url": "https://www.antennasim.com/",
+      "description": "Free interactive educational electromagnetic field and antenna simulator for exploring radiation, interference, phased arrays, dipoles, loops, and passive conducting wires.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Any modern web browser",
+      "isAccessibleForFree": true
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: black;
+        color: white;
+        font-family: sans-serif;
+      }
+      /* Initial SEO-readable introduction and resilient no-JavaScript content. */
+      body > #site-introduction {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 8px 24px 36px;
+        color: #cdd9e6;
+        line-height: 1.65;
+      }
+      #site-introduction h1 { font-size: clamp(20px, 3vw, 30px); line-height: 1.2; color: #f3f7fb; }
+      #site-introduction a { color: #77e2c3; }
+      #site-introduction p { margin: 0 0 12px; }
+      #site-introduction ul { margin: 8px 0 15px; padding-left: 20px; }
+      /* When p5 mounts the full-screen UI, move the same content into a footer
+         disclosure. It stays available to visitors without covering the canvas. */
+      #em-app #antennasim-about { position: relative; flex-shrink: 0; }
+      #em-app #antennasim-about > summary {
+        list-style: none;
+        cursor: pointer;
+        white-space: nowrap;
+        color: #77e2c3;
+        font-size: 11px;
+        border: 1px solid #405368;
+        border-radius: 6px;
+        padding: 5px 9px;
+      }
+      #em-app #antennasim-about > summary::-webkit-details-marker { display:none; }
+      #em-app #antennasim-about > summary:focus-visible { outline: 2px solid #77e2c3; outline-offset: 2px; }
+      #em-app #site-introduction {
+        box-sizing: border-box;
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 10px);
+        z-index: 100;
+        width: min(440px, calc(100vw - 24px));
+        max-height: min(65vh, 580px);
+        overflow: auto;
+        padding: 18px 20px;
+        color: #d5e0e9;
+        background: #121923;
+        border: 1px solid #405368;
+        border-radius: 10px;
+        box-shadow: 0 12px 40px #000b;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      #em-app #site-introduction h1 { font-size: 18px; margin: 0 0 12px; }
+      #em-app #site-introduction a { color: #77e2c3; }
+      #em-app #site-introduction ul { padding-left: 18px; }
+      #em-app #site-introduction p { margin: 10px 0; }
+    </style>
+  </head>
+  <body>
+    <div id="startup-status" role="status" style="padding:24px">Loading AntennaSim…</div>
+    <section id="site-introduction" aria-label="About AntennaSim">
+      <h1>Interactive Antenna &amp; Electromagnetic Field Simulator</h1>
+      <p>AntennaSim is a free browser-based tool for exploring electromagnetic fields and antenna behavior. Place antenna elements, change their parameters, and visualize the resulting electric field, magnetic field, and energy flow in real time.</p>
+      <p>Experiment with center-fed dipoles, Hertzian dipoles, loops, phased arrays, and coupled passive conducting wires. Try built-in examples including a half-wave dipole, Yagi–Uda antenna, and electric quadrupole configuration.</p>
+      <p>This is an educational visualization tool that uses simplified models and numerical approximations; it is not a substitute for full 3D electromagnetic simulation or antenna measurements.</p>
+      <p><a href="about.html">Read the simulator guide and model limitations</a> · <a href="https://github.com/rotemTsafrir/dipole_sim" target="_blank" rel="noopener noreferrer">View the source on GitHub</a></p>
+    </section>
+    <noscript><p style="padding:0 24px;color:#cdd9e6">JavaScript is required to run the interactive simulator. The <a href="about.html" style="color:#77e2c3">guide</a> is available without JavaScript.</p></noscript>
+    <script>
+      window.addEventListener('error', function (event) {
+        var status = document.getElementById('startup-status');
+        if (status) status.textContent = 'Could not start EM Simulator: ' + (event.message || 'a required file failed to load.');
+      });
+    </script>
+    <script src="em-simulator.js?v=20261010-4" onerror="document.getElementById('startup-status').textContent='Could not load em-simulator.js. Extract both files into the same folder.'"></script>
+    <script>
+      (function () {
+        var status = document.getElementById('startup-status');
+        if (typeof window.p5 !== 'function') {
+          status.textContent = 'Could not load p5.js. Check your internet connection and reload.';
+        } else if (typeof window.setup !== 'function' || typeof window.draw !== 'function') {
+          status.textContent = 'The simulator script did not load correctly. Extract both files from the ZIP into the same folder and reload.';
+        } else {
+          var simulatorSetup = window.setup;
+          window.setup = function () {
+            simulatorSetup();
+            // Keep the static introduction available in the simulator's footer.
+            // It is visible while loading and inside the disclosure afterwards.
+            var footer = document.querySelector('#em-app .footer');
+            var introduction = document.getElementById('site-introduction');
+            if (footer && introduction) {
+              var disclosure = document.createElement('details');
+              disclosure.id = 'antennasim-about';
+              var summary = document.createElement('summary');
+              summary.textContent = 'About & guide';
+              disclosure.appendChild(summary);
+              disclosure.appendChild(introduction);
+              footer.appendChild(disclosure);
+            }
+            if (status) status.remove();
+          };
+        }
+      })();
+    </script>
+    <!-- Cloudflare Web Analytics -->
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "f9fc9782926e4a528c42d783c6e402ba"}'></script>
+    <!-- End Cloudflare Web Analytics -->
+  </body>
+</html>
