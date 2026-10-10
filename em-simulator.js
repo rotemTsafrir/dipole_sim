@@ -2053,7 +2053,8 @@ function currentColor(source,index) {
   const j=(source.displayCurrents||source.currentSegments)[index], drive=source.I0;
   const re=drive.a*frameCos-drive.b*frameSin, im=drive.a*frameSin+drive.b*frameCos;
   const magnitude=Math.hypot(j[0]*re-j[2]*im,j[1]*re-j[3]*im);
-  const bright=255*squiz(magnitude,k8,256);
+	
+  const bright = 255 * Math.pow(squiz(magnitude, k8, 256), 0.35);
   return [bright,bright,0];
 }
 function drawComponentOverlay() {
