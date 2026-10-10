@@ -438,9 +438,9 @@ class LinearArray extends Antenna {
     else props.push(edit('loopRadius','Loop radius (λ)',.001,.1,.001,()=>this.radiusLambda,v=>rebuild('radiusLambda',v)));
     return props;
   }
-  getReadouts() { return [['Spacing · simulation units',(this.spacingLambda*this.wavelength).toFixed(4)],['Array span · λ',((this.count-1)*this.spacingLambda).toFixed(3)],['Excitation','Equal amplitude · phase φ₀ + nΔφ']]; }
+  getReadouts() { return [['Spacing · simulation units',(this.spacingLambda*this.wavelength).toFixed(4)],['Array span · λ',((this.count-1)*this.spacingLambda).toFixed(3)]]; }
   getNotes() {
-    const notes=[{text:'Click the center, then set the array axis. Drag the green axis handle to rotate a selected array. Element 0 is at the negative end of the axis. Spacing in λ follows frequency and wave speed.'},
+    const notes=[{text:'Click the center, then set the array axis. Drag the green axis handle to rotate a selected array. Element 0 is at the negative end of the axis.'},
       {text:'Active excitations are prescribed; coupling does not alter their currents. Passive PEC wires respond to their total field. More elements increase computation time.'}];
     if(this.elementType==='smallLoop') {
       notes.push({text:'All loops lie in XY with normal +z, as in the standalone loop model. Ring symbols may be enlarged for visibility.'});
@@ -1568,7 +1568,9 @@ function configureSource(source,type,name) {
 // as manually placed components. Distances are measured relative to lambda.
 const exampleScenes = {
   rotating: 'Rotating dipoles · spiral waves',
-  yagi: 'Yagi–Uda · passive beam shaping'
+  halfwave: 'Half-wave center-fed dipole',
+  yagi: 'Yagi–Uda · passive beam shaping',
+  quadrupole: 'Electric quadrupole · two Hertzian dipoles'
 };
 
 function makeRotatingDipoleScene() {
@@ -1577,6 +1579,29 @@ function makeRotatingDipoleScene() {
     configureSource(new HertzianDipole(wavelength,[0,0],0,moment,0),'hertzian','Hertzian'),
     configureSource(new HertzianDipole(wavelength,[0,0],Math.PI/2,moment,Math.PI/2),'hertzian','Hertzian')
   ];
+}
+
+function makeHalfWaveDipoleScene() {
+  const wavelength=c/freq,half=wavelength/4;
+  const source=configureSource(new Dipole(wavelength,[0,-half],[0,half],
+    defAmp,0,thickDipole/Scale),'dipole','Dipole');
+  source.setSep(Math.min(.05,.01*wavelength));
+  source.label='Half-wave dipole · center fed';
+  return [source];
+}
+
+function makeElectricQuadrupoleScene() {
+  const wavelength=c/freq,d=.04*wavelength,moment=25;
+  // Equal, opposite current moments, separated along their common X axis.
+  // Net electric dipole and r cross J vanish. The quadrupole is leading;
+  // higher multipoles remain at finite separation.
+  return [[[-d,0],Math.PI,'Quadrupole · left −X'],
+    [[d,0],0,'Quadrupole · right +X']].map(([position,angle,label])=>{
+    const source=configureSource(new HertzianDipole(wavelength,position,angle,moment,0),'hertzian','Hertzian');
+    source.label=label;
+    source.getNotes=()=>[{text:'This preset starts with two equal, opposite Hertzian dipoles separated along their common axis by 0.08λ. The electric quadrupole is the leading contribution; finite separation retains higher multipoles. Editing a source can change the cancellation.'}];
+    return source;
+  });
 }
 
 function makeYagiUdaScene() {
@@ -1609,7 +1634,9 @@ function loadExampleScene(key,askBeforeReplacing=true) {
   if (!(key in exampleScenes)) return false;
   if (askBeforeReplacing && antennas.length &&
       !window.confirm('Replace the current scene with "'+exampleScenes[key]+'"? Current edits will be lost.')) return false;
-  antennas=key==='yagi'?makeYagiUdaScene():makeRotatingDipoleScene();
+  const factories={rotating:makeRotatingDipoleScene,yagi:makeYagiUdaScene,halfwave:makeHalfWaveDipoleScene,quadrupole:makeElectricQuadrupoleScene};
+  antennas=factories[key]();
+  requestFieldUpdate();
   // Put the new configuration back in view even after user panning/zooming.
   zoom=1; orig=[width/2+.1,height/2+.1];
   setTool('select');
@@ -1691,7 +1718,9 @@ function mountInterface() {
       <label class="top-control">Examples <select id="em-example" aria-label="Load example scene">
         <option value="">Load example…</option>
         <option value="rotating">Rotating dipoles</option>
-        <option value="yagi">Yagi–Uda antenna</option>
+	<option value="halfwave">Half-wave center-fed dipole</option>
+        <option value="yagi">Yagi–Uda antenna</option>        
+        <option value="quadrupole">Electric quadrupole (2 dipoles)</option>
       </select></label>
       <label class="top-control">Field <select id="em-field"><option value="E">Electric field</option><option value="B">Magnetic field</option><option value="S">Energy flux</option></select></label>
       <label class="top-control">Frequency <input id="em-frequency" type="number" min="${minFreq}" max="${maxFreq}" step="0.01" value="${freq}" title="Simulation frequency"></label>
