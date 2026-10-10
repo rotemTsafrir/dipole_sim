@@ -1744,7 +1744,7 @@ function mountInterface() {
         <div id="em-properties"></div>
         <div class="section"><p class="eyebrow">Scene <span id="em-count"></span></p><div class="scene-list" id="em-scene"></div></div>
         <div class="section"><button class="danger" id="em-clear">Clear scene</button></div>
-        <div class="section muted">Wheel to zoom · 0 to reset<br>V select · H pan · A add<br>Esc cancel · Delete selected<br><br>Values use the original simulation units.<br><br><span style="color:#ffff00">› Yellow wire chevrons: current I(t)</span><br>Direction reverses with the instantaneous conventional current.</div>
+        <div class="section muted">Wheel to zoom · 0 to reset<br>V select · H pan · A add<br>Esc cancel · Delete selected<br><br><br><br><span style="color:#ffff00">› Yellow wire chevrons: current I(t)</span><br>Direction reverses with the instantaneous conventional current.</div>
       </aside>
     </div>
     <footer class="footer"><span class="status" role="status" id="em-status"></span><span id="em-grid"></span><span id="em-wavelength"></span><div class="zoom-controls"><button id="em-zoom-out" aria-label="Zoom out">−</button><button id="em-zoom-reset" title="Reset zoom (0)">100%</button><button id="em-zoom-in" aria-label="Zoom in">+</button></div></footer>`;
